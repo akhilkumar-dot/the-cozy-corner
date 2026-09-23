@@ -232,8 +232,8 @@ function AddBookDialog({ open, onOpenChange, onAdd }: { open: boolean; onOpenCha
             {cover ? <img src={cover} alt="New book cover preview" /> : <><ImagePlus /><strong>Drop a cover here</strong><span>or click to browse</span></>}
           </button>
           <input ref={fileRef} type="file" accept="image/*" className="sr-only" onChange={(e) => readFile(e.target.files?.[0])} />
-          <label className="field-label">Title<Input name="title" required placeholder="The book title" /></label>
-          <label className="field-label">Author<Input name="author" required placeholder="Who wrote it?" /></label>
+          <label className="field-label">Title<Input aria-label="Book title" name="title" required placeholder="The book title" /></label>
+          <label className="field-label">Author<Input aria-label="Book author" name="author" required placeholder="Who wrote it?" /></label>
           <label className="field-label">A tiny note<Textarea name="description" rows={3} placeholder="What caught your eye?" /></label>
           <label className="field-label">Shelf
             <select name="status" className="form-select" defaultValue="TBR">
@@ -366,8 +366,8 @@ function Index() {
           <div className="shelf-tabs" role="tablist" aria-label="Book shelves">
             {(["All", "TBR", "Completed"] as Shelf[]).map((item) => <Button key={item} variant="ghost" role="tab" aria-selected={shelf === item} onClick={() => setShelf(item)} className={shelf === item ? "active" : ""}>{item === "TBR" ? "To Be Read" : item}</Button>)}
           </div>
-          <label className="search-box"><Search /><span className="sr-only">Search books</span><Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search title or author…" />{query && <Button variant="ghost" size="icon" onClick={() => setQuery("")} aria-label="Clear search"><X /></Button>}</label>
-          <label className="sort-box"><ArrowDownAZ /><span className="sr-only">Sort books</span><select value={sort} onChange={(e) => setSort(e.target.value as SortMode)}><option value="recent">Recently added</option><option value="title">Title A–Z</option><option value="author">Author A–Z</option></select></label>
+          <label className="search-box"><Search /><span className="sr-only">Search books</span><Input aria-label="Search books" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search title or author…" />{query && <Button variant="ghost" size="icon" onClick={() => setQuery("")} aria-label="Clear search"><X /></Button>}</label>
+          <label className="sort-box"><ArrowDownAZ /><span className="sr-only">Sort books</span><select aria-label="Sort books" value={sort} onChange={(e) => setSort(e.target.value as SortMode)}><option value="recent">Recently added</option><option value="title">Title A–Z</option><option value="author">Author A–Z</option></select></label>
         </div>
 
         {visibleBooks.length ? <div className="book-grid">
@@ -375,8 +375,7 @@ function Index() {
             <article className="book-card" key={book.id}>
               <div className="cover-wrap">
                 <span className={`status-badge ${book.status === "Completed" ? "is-complete" : ""}`}>{book.status}</span>
-                {book.loading ? <div className="cover-skeleton" /> : book.cover ? <img src={book.cover} alt={`Cover of ${book.title}`} onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.nextElementSibling?.classList.remove("hidden"); }} /> : null}
-                <div className={book.cover ? "hidden h-full w-full" : "h-full w-full"}><BookPlaceholder title={book.title} tone={index} /></div>
+                {book.loading ? <div className="cover-skeleton" /> : book.cover ? <><img src={book.cover} alt={`Cover of ${book.title}`} onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.nextElementSibling?.classList.remove("hidden"); }} /><div className="hidden h-full w-full"><BookPlaceholder title={book.title} tone={index} /></div></> : <div className="h-full w-full"><BookPlaceholder title={book.title} tone={index} /></div>}
               </div>
               <div className="book-info"><h3>{book.title}</h3><p className="author">by {book.author}</p><p className="description">{book.description.replace(/<[^>]*>/g, " ")}</p></div>
               <div className="card-actions">
