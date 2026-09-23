@@ -197,7 +197,7 @@ footer p { font-size: .75rem; opacity: .7; text-align: center; }
 @media (max-width: 760px) {
   .site-header { height: 68px; }.site-header .logo-mark { font-size: .95rem; }.site-header > button { padding-inline: .85rem; font-size: .72rem; }
   .hero-section { min-height: 670px; padding: 4rem 1rem 0; grid-template-columns: 1fr 1fr; grid-template-rows: auto 240px; }
-  .hero-copy { grid-column: 1 / -1; grid-row: 1; padding-bottom: 1rem; }.hero-copy h1 { font-size: clamp(3.7rem, 18vw, 5.2rem); }.hero-copy p { font-size: .85rem; }
+  .hero-copy { grid-column: 1 / -1; grid-row: 1; padding-bottom: 1rem; }.hero-copy h1 { font-size: clamp(3.25rem, 15vw, 4.3rem); }.hero-copy p { font-size: .85rem; }
   .reader-art { grid-row: 2; min-width: 0; width: 210px; }.reader-art-left { justify-self: end; }.reader-art-right { justify-self: start; }
   .sticker-star { left: 3%; top: 3%; width: 42px; height: 42px; font-size: 1.3rem; }.sticker-heart { right: 4%; top: 5%; }
   .sticker-book { display: none; }
