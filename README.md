@@ -4,7 +4,7 @@
 
 A cozy, personal reading tracker to keep every maybe, someday, and couldn't-put-it-down read in one happy little place. Track what's on your shelf, mark books as completed, and add new finds — all wrapped in a warm, illustrated, no-login-needed interface.
 
-![The Book Nook screenshot](./screenshot.png)
+![The Book Nook screenshot](./TheBookNook.png)
 
 ## ✨ Features
 
