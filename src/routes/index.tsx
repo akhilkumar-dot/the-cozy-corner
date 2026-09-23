@@ -6,14 +6,16 @@ import {
   BookOpen,
   Check,
   ChevronDown,
+  FileText,
   ImagePlus,
   Library,
+  Pencil,
   Search,
   Sparkles,
   Trash2,
-  Upload,
   X,
 } from "lucide-react";
+
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -26,6 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { deletePdf, getPdf, savePdf } from "@/lib/pdfStore";
 
 type Status = "TBR" | "Completed";
 type Shelf = "All" | Status;
@@ -40,6 +43,9 @@ type Book = {
   status: Status;
   addedAt: number;
   loading?: boolean;
+  hasPdf?: boolean;
+  pdfFileName?: string | null;
+  pdfFileSize?: number | null;
 };
 
 const seedPairs = [
@@ -83,10 +89,14 @@ const seededBooks: Book[] = seedPairs.map(([title, author], index) => ({
   status: "TBR",
   addedAt: Date.now() - index,
   loading: true,
+  hasPdf: false,
+  pdfFileName: null,
+  pdfFileSize: null,
 }));
 
 const BOOKS_KEY = "book-nook-books-v1";
 const META_KEY = "book-nook-meta-v1";
+const PDF_SIZE_WARN = 10 * 1024 * 1024; // 10 MB
 
 type BookMeta = { cover: string; description: string };
 
@@ -134,6 +144,11 @@ async function fetchBookMeta(title: string, author: string): Promise<BookMeta> {
   return result;
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
@@ -146,7 +161,7 @@ export const Route = createFileRoute("/")({
     ],
   }),
   component: Index,
-});
+}));
 
 function ReaderIllustration({ side }: { side: "left" | "right" }) {
   return (
@@ -180,36 +195,192 @@ function BookPlaceholder({ title, tone = 0 }: { title: string; tone?: number }) 
   );
 }
 
-function AddBookDialog({ open, onOpenChange, onAdd }: { open: boolean; onOpenChange: (v: boolean) => void; onAdd: (book: Book) => void }) {
+// ─── PDF Uploader sub-component ────────────────────────────────────────────────
+type PdfState = {
+  file: File | null;       // newly selected file (pending save)
+  /** existing PDF info pre-loaded from IndexedDB (edit mode) */
+  existingName: string | null;
+  existingSize: number | null;
+  removed: boolean;        // user explicitly cleared an existing PDF
+};
+
+function PdfUploader({
+  pdfState,
+  onChange,
+}: {
+  pdfState: PdfState;
+  onChange: (next: PdfState) => void;
+}) {
+  const [dragging, setDragging] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const accept = (file: File | undefined) => {
+    setError(null);
+    if (!file) return;
+    if (file.type !== "application/pdf") {
+      setError("Only PDF files are accepted. Please choose a .pdf file.");
+      return;
+    }
+    onChange({ file, existingName: null, existingSize: null, removed: false });
+  };
+
+  // Current display info
+  const displayName = pdfState.file?.name ?? (!pdfState.removed ? pdfState.existingName : null);
+  const displaySize = pdfState.file?.size ?? (!pdfState.removed ? pdfState.existingSize : null);
+  const hasFile = !!displayName;
+  const isLarge = displaySize != null && displaySize > PDF_SIZE_WARN;
+
+  const clear = () => {
+    setError(null);
+    if (inputRef.current) inputRef.current.value = "";
+    onChange({ file: null, existingName: pdfState.existingName, existingSize: pdfState.existingSize, removed: true });
+  };
+
+  return (
+    <div className="pdf-uploader-wrap">
+      {!hasFile ? (
+        <button
+          type="button"
+          className={`pdf-upload-zone${dragging ? " is-dragging" : ""}`}
+          onClick={() => inputRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => { e.preventDefault(); setDragging(false); accept(e.dataTransfer.files[0]); }}
+          aria-label="Attach PDF"
+        >
+          <FileText aria-hidden="true" />
+          <strong>Attach PDF (optional)</strong>
+          <span>Drop a .pdf here or click to browse</span>
+        </button>
+      ) : (
+        <div className="pdf-file-info">
+          <FileText aria-hidden="true" />
+          <span className="pdf-file-name">{displayName}</span>
+          {displaySize != null && <span className="pdf-file-size">{formatBytes(displaySize)}</span>}
+          <button type="button" className="pdf-clear-btn" onClick={clear} aria-label="Remove PDF attachment">
+            <X />
+          </button>
+        </div>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".pdf,application/pdf"
+        className="sr-only"
+        onChange={(e) => accept(e.target.files?.[0])}
+      />
+      {error && <p className="pdf-error" role="alert">{error}</p>}
+      {isLarge && !error && (
+        <p className="pdf-warning">⚠ Large PDFs may slow things down — under 10 MB works best.</p>
+      )}
+    </div>
+  );
+}
+
+// ─── Unified BookModal (add + edit) ───────────────────────────────────────────
+type BookModalProps = {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onAdd?: (book: Book) => void;
+  onSave?: (book: Book) => void;
+  editBook?: Book | null;
+};
+
+function BookModal({ open, onOpenChange, onAdd, onSave, editBook }: BookModalProps) {
+  const isEdit = !!editBook;
+
   const [cover, setCover] = useState("");
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [pdfState, setPdfState] = useState<PdfState>({
+    file: null,
+    existingName: null,
+    existingSize: null,
+    removed: false,
+  });
 
-  const readFile = (file?: File) => {
+  // Pre-fill when opening in edit mode
+  useEffect(() => {
+    if (!open) return;
+    if (isEdit && editBook) {
+      setCover(editBook.cover ?? "");
+      // Load existing PDF info if any
+      setPdfState({
+        file: null,
+        existingName: editBook.pdfFileName ?? null,
+        existingSize: editBook.pdfFileSize ?? null,
+        removed: false,
+      });
+    } else {
+      setCover("");
+      setPdfState({ file: null, existingName: null, existingSize: null, removed: false });
+    }
+  }, [open, isEdit, editBook]);
+
+  const readImageFile = (file?: File) => {
     if (!file || !file.type.startsWith("image/")) return;
     const reader = new FileReader();
     reader.onload = () => setCover(typeof reader.result === "string" ? reader.result : "");
     reader.readAsDataURL(file);
   };
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     const title = String(data.get("title") ?? "").trim();
     const author = String(data.get("author") ?? "").trim();
     if (!title || !author) return;
-    onAdd({
-      id: crypto.randomUUID(),
+
+    const id = isEdit && editBook ? editBook.id : crypto.randomUUID();
+
+    // Handle PDF storage
+    let hasPdf = false;
+    let pdfFileName: string | null = null;
+    let pdfFileSize: number | null = null;
+
+    if (pdfState.file) {
+      // New file selected — save to IndexedDB
+      await savePdf(id, pdfState.file);
+      hasPdf = true;
+      pdfFileName = pdfState.file.name;
+      pdfFileSize = pdfState.file.size;
+    } else if (pdfState.removed) {
+      // User explicitly removed existing PDF
+      await deletePdf(id);
+      hasPdf = false;
+      pdfFileName = null;
+      pdfFileSize = null;
+    } else if (isEdit && editBook?.hasPdf && !pdfState.removed) {
+      // Keep existing PDF untouched
+      hasPdf = true;
+      pdfFileName = editBook.pdfFileName ?? null;
+      pdfFileSize = editBook.pdfFileSize ?? null;
+    }
+
+    const book: Book = {
+      id,
       title,
       author,
       description: String(data.get("description") ?? "").trim() || defaultDescription,
       status: data.get("status") === "Completed" ? "Completed" : "TBR",
       cover,
-      addedAt: Date.now(),
-      loading: !cover,
-    });
+      addedAt: isEdit && editBook ? editBook.addedAt : Date.now(),
+      loading: !cover && !isEdit,
+      hasPdf,
+      pdfFileName,
+      pdfFileSize,
+    };
+
+    if (isEdit) {
+      onSave?.(book);
+    } else {
+      onAdd?.(book);
+    }
+
     event.currentTarget.reset();
     setCover("");
+    setPdfState({ file: null, existingName: null, existingSize: null, removed: false });
     onOpenChange(false);
   };
 
@@ -217,30 +388,78 @@ function AddBookDialog({ open, onOpenChange, onAdd }: { open: boolean; onOpenCha
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92vh] overflow-y-auto border-2 border-ink bg-cream shadow-playful sm:max-w-xl sm:rounded-sm">
         <DialogHeader>
-          <DialogTitle className="font-display text-3xl">Add a new adventure</DialogTitle>
-          <DialogDescription>Pop in the details now. We’ll look for a cover if you don’t add one.</DialogDescription>
+          <DialogTitle className="font-display text-3xl">
+            {isEdit ? "Edit this adventure" : "Add a new adventure"}
+          </DialogTitle>
+          <DialogDescription>
+            {isEdit
+              ? "Update the details below. Your changes save in place."
+              : "Pop in the details now. We'll look for a cover if you don't add one."}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
+          {/* Cover image uploader */}
           <button
             type="button"
             className={`upload-zone ${dragging ? "is-dragging" : ""}`}
             onClick={() => fileRef.current?.click()}
             onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
             onDragLeave={() => setDragging(false)}
-            onDrop={(event) => { event.preventDefault(); setDragging(false); readFile(event.dataTransfer.files[0]); }}
+            onDrop={(event) => { event.preventDefault(); setDragging(false); readImageFile(event.dataTransfer.files[0]); }}
           >
-            {cover ? <img src={cover} alt="New book cover preview" /> : <><ImagePlus /><strong>Drop a cover here</strong><span>or click to browse</span></>}
+            {cover ? <img src={cover} alt="Book cover preview" /> : <><ImagePlus /><strong>Drop a cover here</strong><span>or click to browse</span></>}
           </button>
-          <input ref={fileRef} type="file" accept="image/*" className="sr-only" onChange={(e) => readFile(e.target.files?.[0])} />
-          <label className="field-label">Title<Input aria-label="Book title" name="title" required placeholder="The book title" /></label>
-          <label className="field-label">Author<Input aria-label="Book author" name="author" required placeholder="Who wrote it?" /></label>
-          <label className="field-label">A tiny note<Textarea name="description" rows={3} placeholder="What caught your eye?" /></label>
+          <input ref={fileRef} type="file" accept="image/*" className="sr-only" onChange={(e) => readImageFile(e.target.files?.[0])} />
+
+          {/* PDF uploader */}
+          <PdfUploader pdfState={pdfState} onChange={setPdfState} />
+
+          <label className="field-label">Title
+            <Input
+              aria-label="Book title"
+              name="title"
+              required
+              placeholder="The book title"
+              defaultValue={isEdit ? editBook?.title : undefined}
+              key={`title-${editBook?.id ?? "new"}-${open ? "open" : "closed"}`}
+            />
+          </label>
+          <label className="field-label">Author
+            <Input
+              aria-label="Book author"
+              name="author"
+              required
+              placeholder="Who wrote it?"
+              defaultValue={isEdit ? editBook?.author : undefined}
+              key={`author-${editBook?.id ?? "new"}-${open ? "open" : "closed"}`}
+            />
+          </label>
+          <label className="field-label">A tiny note
+            <Textarea
+              name="description"
+              rows={3}
+              placeholder="What caught your eye?"
+              defaultValue={isEdit && editBook?.description !== defaultDescription ? editBook?.description : undefined}
+              key={`desc-${editBook?.id ?? "new"}-${open ? "open" : "closed"}`}
+            />
+          </label>
           <label className="field-label">Shelf
-            <select name="status" className="form-select" defaultValue="TBR">
-              <option value="TBR">To Be Read</option><option value="Completed">Completed</option>
+            <select
+              name="status"
+              className="form-select"
+              defaultValue={isEdit ? editBook?.status : "TBR"}
+              key={`status-${editBook?.id ?? "new"}-${open ? "open" : "closed"}`}
+            >
+              <option value="TBR">To Be Read</option>
+              <option value="Completed">Completed</option>
             </select>
           </label>
-          <Button type="submit" className="h-12 w-full rounded-full border-2 border-ink bg-coral font-display text-base text-ink shadow-button hover:bg-coral/90">Add to my nook <BookHeart /></Button>
+          <Button
+            type="submit"
+            className="h-12 w-full rounded-full border-2 border-ink bg-coral font-display text-base text-ink shadow-button hover:bg-coral/90"
+          >
+            {isEdit ? <>Save Changes <Check /></> : <>Add to my nook <BookHeart /></>}
+          </Button>
         </form>
       </DialogContent>
     </Dialog>
@@ -255,6 +474,7 @@ function Index() {
   const [sort, setSort] = useState<SortMode>("recent");
   const [modalOpen, setModalOpen] = useState(false);
   const [celebrating, setCelebrating] = useState<string | null>(null);
+  const [editingBook, setEditingBook] = useState<Book | null>(null);
 
   useEffect(() => {
     try {
@@ -317,8 +537,9 @@ function Index() {
   };
 
   const removeBook = (book: Book) => {
-    if (window.confirm(`Remove “${book.title}” from your nook?`)) {
+    if (window.confirm(`Remove "${book.title}" from your nook?`)) {
       setBooks((current) => current.filter((item) => item.id !== book.id));
+      if (book.hasPdf) void deletePdf(book.id);
       toast("Book removed", { description: book.title });
     }
   };
@@ -329,6 +550,35 @@ function Index() {
     if (!book.cover) {
       void fetchBookMeta(book.title, book.author).then((meta) => setBooks((current) => current.map((item) => item.id === book.id ? { ...item, ...meta, loading: false } : item)));
     }
+  };
+
+  const saveBook = (updated: Book) => {
+    setBooks((current) => current.map((book) => book.id === updated.id ? { ...book, ...updated } : book));
+    toast.success("Updated!", { description: `${updated.title} has been saved.` });
+    if (!updated.cover) {
+      void fetchBookMeta(updated.title, updated.author).then((meta) => setBooks((current) => current.map((item) => item.id === updated.id ? { ...item, ...meta, loading: false } : item)));
+    }
+  };
+
+  const openPdf = async (bookId: string) => {
+    try {
+      const blob = await getPdf(bookId);
+      if (!blob) { toast.error("PDF not found", { description: "The file may have been cleared." }); return; }
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      // Revoke after a short delay to allow the tab to load
+      window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch {
+      toast.error("Couldn't open PDF", { description: "Something went wrong reading from storage." });
+    }
+  };
+
+  const handleEditOpen = (book: Book) => {
+    setEditingBook(book);
+  };
+
+  const handleEditClose = (v: boolean) => {
+    if (!v) setEditingBook(null);
   };
 
   return (
@@ -345,7 +595,7 @@ function Index() {
         <div className="hero-copy">
           <div className="eyebrow"><Sparkles /> A QUIET CORNER FOR YOUR STORIES</div>
           <h1>Your library,<br /><span>lately.</span></h1>
-          <p>Keep every maybe, someday, and couldn’t-put-it-down read in one happy little place.</p>
+          <p>Keep every maybe, someday, and couldn't-put-it-down read in one happy little place.</p>
           <Button onClick={() => document.getElementById("shelves")?.scrollIntoView({ behavior: "smooth" })} className="hero-button">Browse my shelf <ChevronDown /></Button>
         </div>
         <ReaderIllustration side="right" />
@@ -361,7 +611,7 @@ function Index() {
       </section>
 
       <section id="shelves" className="shelf-section">
-        <div className="section-heading"><div><span className="eyebrow plain">MY BOOKSHELF</span><h2>What’s on the <em>shelf?</em></h2></div><p>{visibleBooks.length} {visibleBooks.length === 1 ? "book" : "books"} in view</p></div>
+        <div className="section-heading"><div><span className="eyebrow plain">MY BOOKSHELF</span><h2>What's on the <em>shelf?</em></h2></div><p>{visibleBooks.length} {visibleBooks.length === 1 ? "book" : "books"} in view</p></div>
         <div className="shelf-tools">
           <div className="shelf-tabs" role="tablist" aria-label="Book shelves">
             {(["All", "TBR", "Completed"] as Shelf[]).map((item) => <Button key={item} variant="ghost" role="tab" aria-selected={shelf === item} onClick={() => setShelf(item)} className={shelf === item ? "active" : ""}>{item === "TBR" ? "To Be Read" : item}</Button>)}
@@ -380,19 +630,37 @@ function Index() {
               <div className="book-info"><h3>{book.title}</h3><p className="author">by {book.author}</p><p className="description">{book.description.replace(/<[^>]*>/g, " ")}</p></div>
               <div className="card-actions">
                 <Button onClick={() => toggleStatus(book.id)} className={book.status === "Completed" ? "status-action is-complete" : "status-action"}>{book.status === "Completed" ? <><BookOpen /> Move to TBR</> : <><Check /> Mark completed</>}</Button>
-                <Button variant="ghost" size="icon" onClick={() => removeBook(book)} aria-label={`Remove ${book.title}`} title="Remove book"><Trash2 /></Button>
+                <Button variant="ghost" size="icon" onClick={() => handleEditOpen(book)} aria-label={`Edit ${book.title}`} title="Edit book" className="card-icon-btn"><Pencil /></Button>
+                <Button variant="ghost" size="icon" onClick={() => removeBook(book)} aria-label={`Remove ${book.title}`} title="Remove book" className="card-icon-btn card-icon-btn--danger"><Trash2 /></Button>
               </div>
+              {book.hasPdf && (
+                <div className="card-pdf-row">
+                  <button type="button" className="pdf-pill" onClick={() => openPdf(book.id)}>
+                    📄 Read PDF
+                  </button>
+                </div>
+              )}
               {celebrating === book.id && <div className="confetti" aria-hidden="true">✦ <span>♥</span> ★ <b>✦</b> ●</div>}
             </article>
           ))}
         </div> : <div className="empty-shelf"><BookOpen /><h3>No stories here yet.</h3><p>Try another shelf or search, or add a new book.</p><Button onClick={() => setModalOpen(true)} className="hero-button">+ Add a Book</Button></div>}
       </section>
 
-      <section id="quote" className="quote-section"><span className="giant-quote">“</span><div><p>A room without books is like a body without a soul.</p><span>— Marcus Tullius Cicero</span></div><svg viewBox="0 0 170 170" aria-hidden="true"><circle className="fill-yellow stroke-ink" cx="85" cy="86" r="59" strokeWidth="3" /><path className="fill-coral stroke-ink" strokeWidth="3" d="M47 115V53h61v62l-30-17Z" /><path className="stroke-ink" strokeWidth="4" strokeLinecap="round" d="M129 28l9-13m10 32 15-4m-31 7 9 9" /></svg></section>
+      <section id="quote" className="quote-section"><span className="giant-quote">"</span><div><p>A room without books is like a body without a soul.</p><span>— Marcus Tullius Cicero</span></div><svg viewBox="0 0 170 170" aria-hidden="true"><circle className="fill-yellow stroke-ink" cx="85" cy="86" r="59" strokeWidth="3" /><path className="fill-coral stroke-ink" strokeWidth="3" d="M47 115V53h61v62l-30-17Z" /><path className="stroke-ink" strokeWidth="4" strokeLinecap="round" d="M129 28l9-13m10 32 15-4m-31 7 9 9" /></svg></section>
 
       <section className="cta-band"><div><span className="eyebrow plain">ONE MORE CHAPTER?</span><h2>Add your next <em>great read.</em></h2><Button onClick={() => setModalOpen(true)} className="hero-button">Add a Book <BookHeart /></Button></div><div className="cta-stack"><BookPlaceholder title="Your next favorite" tone={3} /></div></section>
       <footer><a href="#top" className="logo-mark"><span>THE</span> BOOK NOOK <BookOpen /></a><p>Made for slow mornings, late nights, and very full shelves.</p><a href="#shelves">Back to my shelf ↑</a></footer>
-      <AddBookDialog open={modalOpen} onOpenChange={setModalOpen} onAdd={addBook} />
+
+      {/* Add book modal */}
+      <BookModal open={modalOpen} onOpenChange={setModalOpen} onAdd={addBook} />
+
+      {/* Edit book modal */}
+      <BookModal
+        open={!!editingBook}
+        onOpenChange={handleEditClose}
+        onSave={saveBook}
+        editBook={editingBook}
+      />
     </main>
   );
 }

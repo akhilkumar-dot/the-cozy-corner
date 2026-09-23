@@ -214,3 +214,31 @@ footer p { font-size: .75rem; opacity: .7; text-align: center; }
   .stat-tile { padding: 1.2rem; }.stat-tile strong { font-size: 2.5rem; }.stat-tile span { font-size: .62rem; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+/* ─── PDF uploader ─────────────────────────────────────────────────────────── */
+.pdf-uploader-wrap { display: flex; flex-direction: column; gap: .4rem; }
+.pdf-upload-zone { width: 100%; min-height: 90px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .3rem; border: 2px dashed color-mix(in oklab, var(--ink) 45%, transparent); border-radius: .4rem; background: var(--sky); cursor: pointer; transition: background .15s, transform .15s; padding: 1rem; }
+.pdf-upload-zone:hover { background: color-mix(in oklab, var(--sky) 80%, var(--mint)); }
+.pdf-upload-zone.is-dragging { background: var(--mint); transform: scale(.99); border-color: var(--ink); }
+.pdf-upload-zone svg { width: 1.5rem; height: 1.5rem; color: var(--ink); opacity: .65; }
+.pdf-upload-zone strong { font-size: .8rem; font-weight: 800; text-transform: uppercase; }
+.pdf-upload-zone span { font-size: .72rem; color: var(--muted-foreground); }
+.pdf-file-info { display: flex; align-items: center; gap: .5rem; padding: .55rem .85rem; border: 2px solid var(--ink); border-radius: .4rem; background: var(--card); }
+.pdf-file-info > svg { width: 1.15rem; height: 1.15rem; flex: none; color: var(--coral); }
+.pdf-file-name { flex: 1; min-width: 0; font-size: .78rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pdf-file-size { font-size: .72rem; color: var(--muted-foreground); white-space: nowrap; flex: none; }
+.pdf-clear-btn { flex: none; display: grid; place-items: center; width: 1.6rem; height: 1.6rem; border: 1.5px solid var(--ink); border-radius: 50%; background: transparent; cursor: pointer; color: var(--ink); transition: background .15s; }
+.pdf-clear-btn:hover { background: var(--coral-soft); }
+.pdf-clear-btn svg { width: .85rem; height: .85rem; }
+.pdf-warning { margin: 0; font-size: .72rem; font-weight: 700; color: oklch(0.48 0.15 70); background: oklch(0.96 0.12 88); border: 1.5px solid oklch(0.78 0.18 80); border-radius: .3rem; padding: .35rem .6rem; }
+.pdf-error { margin: 0; font-size: .72rem; font-weight: 700; color: var(--destructive); background: oklch(0.97 0.04 20); border: 1.5px solid var(--destructive); border-radius: .3rem; padding: .35rem .6rem; }
+
+/* ─── PDF pill on book card ────────────────────────────────────────────────── */
+.card-pdf-row { padding: 0 1rem .85rem; }
+.pdf-pill { display: inline-flex; align-items: center; gap: .3rem; height: 1.9rem; padding: 0 .75rem; border: 1.5px solid var(--ink); border-radius: 999px; background: var(--sky); color: var(--ink); font-size: .68rem; font-weight: 800; cursor: pointer; transition: background .15s, transform .12s, box-shadow .12s; box-shadow: 2px 2px 0 color-mix(in oklab, var(--ink) 30%, transparent); white-space: nowrap; }
+.pdf-pill:hover { background: var(--mint); transform: translateY(-1px); box-shadow: 3px 3px 0 color-mix(in oklab, var(--ink) 40%, transparent); }
+
+/* ─── Edit / delete icon buttons on cards ─────────────────────────────────── */
+.card-icon-btn { flex: none; width: 2.1rem; height: 2.1rem; border-radius: 50%; color: var(--muted-foreground); transition: color .15s, background .15s; }
+.card-icon-btn:hover { color: var(--ink); background: var(--yellow); }
+.card-icon-btn--danger:hover { color: var(--destructive); background: oklch(0.97 0.04 20); }
