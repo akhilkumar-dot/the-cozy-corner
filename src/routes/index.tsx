@@ -46,6 +46,52 @@ type Book = {
   hasPdf?: boolean;
   pdfFileName?: string | null;
   pdfFileSize?: number | null;
+  genre?: string;
+};
+
+const GENRE_OPTIONS = [
+  "Fiction",
+  "Romance",
+  "Mystery & Thriller",
+  "Sci-Fi & Fantasy",
+  "Classics",
+  "Cozy Fiction",
+  "Historical Fiction",
+  "Literary Fiction",
+  "Memoir & Biography",
+  "Young Adult",
+  "Self-Help",
+  "Non-Fiction",
+  "Other",
+] as const;
+
+const seedGenreMap: Record<string, string> = {
+  "Atmosphere: A Love Story": "Romance",
+  "Fake Skating": "Young Adult",
+  "Heart the Lover": "Fiction",
+  "In Your Dreams": "Romance",
+  "Intermezzo": "Literary Fiction",
+  "Normal People": "Literary Fiction",
+  "Queen of Shadows": "Sci-Fi & Fantasy",
+  "Strangers: A Memoir of Marriage": "Memoir & Biography",
+  "The Correspondent": "Historical Fiction",
+  "The Mating Game": "Romance",
+  "The Only One Left": "Mystery & Thriller",
+  "Tomorrow, and Tomorrow, and Tomorrow": "Fiction",
+  "Where the Crawdads Sing": "Mystery & Thriller",
+  "Yesteryear": "Sci-Fi & Fantasy",
+  "Days at the Morisaki Bookshop": "Cozy Fiction",
+  "Wish I Could Tell You": "Romance",
+  "Fool Me Twice": "Romance",
+  "The Match": "Romance",
+  "400 Days": "Mystery & Thriller",
+  "A Man Called Ove": "Fiction",
+  "The Silent Patient": "Mystery & Thriller",
+  "The Lion Women of Tehran": "Historical Fiction",
+  "A Touch of Eternity": "Romance",
+  "Animal Farm": "Classics",
+  "On the Open Road": "Self-Help",
+  "Days at the Torunka Café": "Cozy Fiction",
 };
 
 const seedPairs = [
@@ -92,13 +138,14 @@ const seededBooks: Book[] = seedPairs.map(([title, author], index) => ({
   hasPdf: false,
   pdfFileName: null,
   pdfFileSize: null,
+  genre: seedGenreMap[title] || "Fiction",
 }));
 
 const BOOKS_KEY = "book-nook-books-v1";
 const META_KEY = "book-nook-meta-v1";
 const PDF_SIZE_WARN = 10 * 1024 * 1024; // 10 MB
 
-type BookMeta = { cover: string; description: string };
+type BookMeta = { cover: string; description: string; genre?: string };
 
 function readCache(): Record<string, BookMeta> {
   try {
@@ -121,9 +168,16 @@ async function fetchBookMeta(title: string, author: string): Promise<BookMeta> {
       const data = await google.json();
       const info = data.items?.[0]?.volumeInfo;
       const thumb = info?.imageLinks?.thumbnail as string | undefined;
+      const category = info?.categories?.[0];
+      let genreCandidate: string | undefined;
+      if (category) {
+        const parts = category.split("/").map((s: string) => s.trim());
+        genreCandidate = parts[parts.length - 1] || parts[0];
+      }
       result = {
         cover: thumb ? thumb.replace("http://", "https://").replace("zoom=1", "zoom=2") : "",
         description: info?.description || defaultDescription,
+        genre: genreCandidate,
       };
     }
     if (!result.cover) {
@@ -143,6 +197,7 @@ async function fetchBookMeta(title: string, author: string): Promise<BookMeta> {
   localStorage.setItem(META_KEY, JSON.stringify({ ...cache, [key]: result }));
   return result;
 }
+
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -358,6 +413,8 @@ function BookModal({ open, onOpenChange, onAdd, onSave, editBook }: BookModalPro
       pdfFileSize = editBook.pdfFileSize ?? null;
     }
 
+    const genre = String(data.get("genre") ?? "Fiction").trim() || "Fiction";
+
     const book: Book = {
       id,
       title,
@@ -370,6 +427,7 @@ function BookModal({ open, onOpenChange, onAdd, onSave, editBook }: BookModalPro
       hasPdf,
       pdfFileName,
       pdfFileSize,
+      genre,
     };
 
     if (isEdit) {
@@ -443,17 +501,31 @@ function BookModal({ open, onOpenChange, onAdd, onSave, editBook }: BookModalPro
               key={`desc-${editBook?.id ?? "new"}-${open ? "open" : "closed"}`}
             />
           </label>
-          <label className="field-label">Shelf
-            <select
-              name="status"
-              className="form-select"
-              defaultValue={isEdit ? editBook?.status : "TBR"}
-              key={`status-${editBook?.id ?? "new"}-${open ? "open" : "closed"}`}
-            >
-              <option value="TBR">To Be Read</option>
-              <option value="Completed">Completed</option>
-            </select>
-          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="field-label">Shelf
+              <select
+                name="status"
+                className="form-select"
+                defaultValue={isEdit ? editBook?.status : "TBR"}
+                key={`status-${editBook?.id ?? "new"}-${open ? "open" : "closed"}`}
+              >
+                <option value="TBR">To Be Read</option>
+                <option value="Completed">Completed</option>
+              </select>
+            </label>
+            <label className="field-label">Genre
+              <select
+                name="genre"
+                className="form-select"
+                defaultValue={isEdit ? (editBook?.genre ?? "Fiction") : "Fiction"}
+                key={`genre-${editBook?.id ?? "new"}-${open ? "open" : "closed"}`}
+              >
+                {GENRE_OPTIONS.map((g) => (
+                  <option key={g} value={g}>{g}</option>
+                ))}
+              </select>
+            </label>
+          </div>
           <Button
             type="submit"
             className="h-12 w-full rounded-full border-2 border-ink bg-coral font-display text-base text-ink shadow-button hover:bg-coral/90"
@@ -463,6 +535,7 @@ function BookModal({ open, onOpenChange, onAdd, onSave, editBook }: BookModalPro
         </form>
       </DialogContent>
     </Dialog>
+
   );
 }
 
@@ -470,6 +543,7 @@ function Index() {
   const [books, setBooks] = useState<Book[]>(seededBooks);
   const [hydrated, setHydrated] = useState(false);
   const [shelf, setShelf] = useState<Shelf>("All");
+  const [selectedGenre, setSelectedGenre] = useState<string>("All");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortMode>("recent");
   const [modalOpen, setModalOpen] = useState(false);
@@ -479,7 +553,17 @@ function Index() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem(BOOKS_KEY);
-      setBooks(saved ? JSON.parse(saved) : seededBooks);
+      if (saved) {
+        const parsed = JSON.parse(saved) as Book[];
+        // Backfill genres for existing saved books if missing
+        const withGenres = parsed.map((book) => ({
+          ...book,
+          genre: book.genre || seedGenreMap[book.title] || "Fiction",
+        }));
+        setBooks(withGenres);
+      } else {
+        setBooks(seededBooks);
+      }
     } catch {
       setBooks(seededBooks);
     }
@@ -516,13 +600,23 @@ function Index() {
   const tbr = books.length - completed;
   const rhythm = books.length ? Math.round((completed / books.length) * 100) : 0;
 
+  const availableGenres = useMemo(() => {
+    const set = new Set<string>();
+    books.forEach((b) => {
+      if (b.genre) set.add(b.genre);
+    });
+    return ["All", ...Array.from(set).sort()];
+  }, [books]);
+
   const visibleBooks = useMemo(() => {
     const normalized = query.toLowerCase();
     return books
       .filter((book) => shelf === "All" || book.status === shelf)
-      .filter((book) => `${book.title} ${book.author}`.toLowerCase().includes(normalized))
+      .filter((book) => selectedGenre === "All" || (book.genre ?? "Fiction") === selectedGenre)
+      .filter((book) => `${book.title} ${book.author} ${book.genre ?? ""}`.toLowerCase().includes(normalized))
       .sort((a, b) => sort === "title" ? a.title.localeCompare(b.title) : sort === "author" ? a.author.localeCompare(b.author) : b.addedAt - a.addedAt);
-  }, [books, shelf, query, sort]);
+  }, [books, shelf, selectedGenre, query, sort]);
+
 
   const toggleStatus = (id: string) => {
     const target = books.find((book) => book.id === id);
@@ -611,13 +705,47 @@ function Index() {
       </section>
 
       <section id="shelves" className="shelf-section">
-        <div className="section-heading"><div><span className="eyebrow plain">MY BOOKSHELF</span><h2>What's on the <em>shelf?</em></h2></div><p>{visibleBooks.length} {visibleBooks.length === 1 ? "book" : "books"} in view</p></div>
+        <div className="section-heading">
+          <div>
+            <span className="eyebrow plain">MY BOOKSHELF</span>
+            <h2>What's on the <em>shelf?</em></h2>
+          </div>
+          <p>
+            {visibleBooks.length} {visibleBooks.length === 1 ? "book" : "books"} in view
+            {selectedGenre !== "All" && ` · ${selectedGenre}`}
+          </p>
+        </div>
         <div className="shelf-tools">
           <div className="shelf-tabs" role="tablist" aria-label="Book shelves">
             {(["All", "TBR", "Completed"] as Shelf[]).map((item) => <Button key={item} variant="ghost" role="tab" aria-selected={shelf === item} onClick={() => setShelf(item)} className={shelf === item ? "active" : ""}>{item === "TBR" ? "To Be Read" : item}</Button>)}
           </div>
-          <label className="search-box"><Search /><span className="sr-only">Search books</span><Input aria-label="Search books" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search title or author…" />{query && <Button variant="ghost" size="icon" onClick={() => setQuery("")} aria-label="Clear search"><X /></Button>}</label>
+          <label className="search-box"><Search /><span className="sr-only">Search books</span><Input aria-label="Search books" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search title, author, or genre…" />{query && <Button variant="ghost" size="icon" onClick={() => setQuery("")} aria-label="Clear search"><X /></Button>}</label>
           <label className="sort-box"><ArrowDownAZ /><span className="sr-only">Sort books</span><select aria-label="Sort books" value={sort} onChange={(e) => setSort(e.target.value as SortMode)}><option value="recent">Recently added</option><option value="title">Title A–Z</option><option value="author">Author A–Z</option></select></label>
+        </div>
+
+        <div className="genre-filter-strip" role="group" aria-label="Filter by genre">
+          <span className="genre-filter-label"><Sparkles className="w-3.5 h-3.5" /> Genre:</span>
+          <div className="genre-pill-list">
+            {availableGenres.map((g) => (
+              <button
+                key={g}
+                type="button"
+                onClick={() => setSelectedGenre(g)}
+                className={`genre-filter-pill ${selectedGenre === g ? "is-active" : ""}`}
+              >
+                {g === "All" ? "All Genres" : g}
+              </button>
+            ))}
+          </div>
+          {selectedGenre !== "All" && (
+            <button
+              type="button"
+              className="genre-clear-btn"
+              onClick={() => setSelectedGenre("All")}
+            >
+              Clear filter <X className="w-3.5 h-3.5 inline" />
+            </button>
+          )}
         </div>
 
         {visibleBooks.length ? <div className="book-grid">
@@ -627,7 +755,14 @@ function Index() {
                 <span className={`status-badge ${book.status === "Completed" ? "is-complete" : ""}`}>{book.status}</span>
                 {book.loading ? <div className="cover-skeleton" /> : book.cover ? <><img src={book.cover} alt={`Cover of ${book.title}`} onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.nextElementSibling?.classList.remove("hidden"); }} /><div className="hidden h-full w-full"><BookPlaceholder title={book.title} tone={index} /></div></> : <div className="h-full w-full"><BookPlaceholder title={book.title} tone={index} /></div>}
               </div>
-              <div className="book-info"><h3>{book.title}</h3><p className="author">by {book.author}</p><p className="description">{book.description.replace(/<[^>]*>/g, " ")}</p></div>
+              <div className="book-info">
+                <div className="book-meta-row">
+                  <p className="author">by {book.author}</p>
+                  {book.genre && <span className="genre-tag">{book.genre}</span>}
+                </div>
+                <h3>{book.title}</h3>
+                <p className="description">{book.description.replace(/<[^>]*>/g, " ")}</p>
+              </div>
               <div className="card-actions">
                 <Button onClick={() => toggleStatus(book.id)} className={book.status === "Completed" ? "status-action is-complete" : "status-action"}>{book.status === "Completed" ? <><BookOpen /> Move to TBR</> : <><Check /> Mark completed</>}</Button>
                 <Button variant="ghost" size="icon" onClick={() => handleEditOpen(book)} aria-label={`Edit ${book.title}`} title="Edit book" className="card-icon-btn"><Pencil /></Button>
@@ -643,7 +778,8 @@ function Index() {
               {celebrating === book.id && <div className="confetti" aria-hidden="true">✦ <span>♥</span> ★ <b>✦</b> ●</div>}
             </article>
           ))}
-        </div> : <div className="empty-shelf"><BookOpen /><h3>No stories here yet.</h3><p>Try another shelf or search, or add a new book.</p><Button onClick={() => setModalOpen(true)} className="hero-button">+ Add a Book</Button></div>}
+        </div> : <div className="empty-shelf"><BookOpen /><h3>No stories here yet.</h3><p>{selectedGenre !== "All" ? `No books found under "${selectedGenre}". Try selecting All Genres or adjusting your search.` : "Try another shelf or search, or add a new book."}</p>{selectedGenre !== "All" ? <Button onClick={() => setSelectedGenre("All")} className="hero-button">Show All Genres</Button> : <Button onClick={() => setModalOpen(true)} className="hero-button">+ Add a Book</Button>}</div>}
+
       </section>
 
       <section id="quote" className="quote-section"><span className="giant-quote">"</span><div><p>A room without books is like a body without a soul.</p><span>— Marcus Tullius Cicero</span></div><svg viewBox="0 0 170 170" aria-hidden="true"><circle className="fill-yellow stroke-ink" cx="85" cy="86" r="59" strokeWidth="3" /><path className="fill-coral stroke-ink" strokeWidth="3" d="M47 115V53h61v62l-30-17Z" /><path className="stroke-ink" strokeWidth="4" strokeLinecap="round" d="M129 28l9-13m10 32 15-4m-31 7 9 9" /></svg></section>

@@ -242,3 +242,16 @@ footer p { font-size: .75rem; opacity: .7; text-align: center; }
 .card-icon-btn { flex: none; width: 2.1rem; height: 2.1rem; border-radius: 50%; color: var(--muted-foreground); transition: color .15s, background .15s; }
 .card-icon-btn:hover { color: var(--ink); background: var(--yellow); }
 .card-icon-btn--danger:hover { color: var(--destructive); background: oklch(0.97 0.04 20); }
+
+/* ─── Genre tags and filtering ────────────────────────────────────────────── */
+.book-meta-row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin: .35rem 0 .75rem; flex-wrap: wrap; }
+.book-meta-row .author { margin: 0; }
+.genre-tag { display: inline-flex; align-items: center; padding: .15rem .55rem; border: 1.5px solid var(--ink); border-radius: 999px; background: var(--yellow); font-size: .62rem; font-weight: 700; color: var(--ink); white-space: nowrap; line-height: 1.2; box-shadow: 1.5px 1.5px 0 var(--ink); }
+.genre-filter-strip { max-width: 1400px; margin: -1.2rem auto 2.2rem; display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; padding: 0 .2rem; }
+.genre-filter-label { font-size: .75rem; font-weight: 800; text-transform: uppercase; color: var(--muted-foreground); display: inline-flex; align-items: center; gap: .35rem; }
+.genre-pill-list { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.genre-filter-pill { height: 2.1rem; padding: 0 .9rem; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); font-family: var(--font-display); font-size: .8rem; font-weight: 600; color: var(--ink); cursor: pointer; transition: background .15s, transform .12s, box-shadow .12s; box-shadow: 2px 2px 0 var(--ink); }
+.genre-filter-pill:hover { background: var(--yellow); transform: translateY(-1px); }
+.genre-filter-pill.is-active { background: var(--coral); color: var(--ink); transform: translateY(-1px); box-shadow: 3px 3px 0 var(--ink); font-weight: 700; }
+.genre-clear-btn { display: inline-flex; align-items: center; gap: .25rem; font-size: .72rem; font-weight: 700; color: var(--coral); background: transparent; border: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; padding: .2rem .4rem; }
+.genre-clear-btn:hover { color: var(--ink); }
