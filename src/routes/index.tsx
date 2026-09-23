@@ -29,6 +29,18 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { deletePdf, getPdf, savePdf } from "@/lib/pdfStore";
+import {
+  deleteBookFromDb,
+  deletePdfFromStorage,
+  fetchBooksFromDb,
+  getPdfUrlFromStorage,
+  isSupabaseConfigured,
+  saveBookToDb,
+  seedBooksInDb,
+  supabase,
+  uploadPdfToStorage,
+  type DbBookRow,
+} from "@/lib/supabase";
 
 type Status = "TBR" | "Completed";
 type Shelf = "All" | Status;
@@ -48,6 +60,40 @@ type Book = {
   pdfFileSize?: number | null;
   genre?: string;
 };
+
+function rowToBook(row: DbBookRow): Book {
+  return {
+    id: row.id,
+    title: row.title,
+    author: row.author,
+    cover: row.cover || "",
+    description: row.description || "",
+    status: row.status,
+    genre: row.genre || "Fiction",
+    addedAt: Number(row.added_at),
+    hasPdf: Boolean(row.has_pdf),
+    pdfFileName: row.pdf_file_name,
+    pdfFileSize: row.pdf_file_size,
+  };
+}
+
+function bookToRow(book: Book): DbBookRow {
+  return {
+    id: book.id,
+    title: book.title,
+    author: book.author,
+    cover: book.cover || "",
+    description: book.description || "",
+    status: book.status,
+    genre: book.genre || "Fiction",
+    added_at: book.addedAt,
+    has_pdf: Boolean(book.hasPdf),
+    pdf_file_name: book.pdfFileName || null,
+    pdf_file_size: book.pdfFileSize || null,
+    pdf_storage_path: book.hasPdf ? `${book.id}.pdf` : null,
+  };
+}
+
 
 const GENRE_OPTIONS = [
   "Fiction",
@@ -337,10 +383,11 @@ function PdfUploader({
 type BookModalProps = {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onAdd?: (book: Book) => void;
-  onSave?: (book: Book) => void;
+  onAdd?: (book: Book, pdfFile?: File | null) => void;
+  onSave?: (book: Book, pdfFile?: File | null, pdfRemoved?: boolean) => void;
   editBook?: Book | null;
 };
+
 
 function BookModal({ open, onOpenChange, onAdd, onSave, editBook }: BookModalProps) {
   const isEdit = !!editBook;
@@ -431,10 +478,11 @@ function BookModal({ open, onOpenChange, onAdd, onSave, editBook }: BookModalPro
     };
 
     if (isEdit) {
-      onSave?.(book);
+      onSave?.(book, pdfState.file, pdfState.removed);
     } else {
-      onAdd?.(book);
+      onAdd?.(book, pdfState.file);
     }
+
 
     event.currentTarget.reset();
     setCover("");
@@ -551,23 +599,85 @@ function Index() {
   const [editingBook, setEditingBook] = useState<Book | null>(null);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(BOOKS_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved) as Book[];
-        // Backfill genres for existing saved books if missing
-        const withGenres = parsed.map((book) => ({
-          ...book,
-          genre: book.genre || seedGenreMap[book.title] || "Fiction",
-        }));
-        setBooks(withGenres);
-      } else {
-        setBooks(seededBooks);
+    let cancelled = false;
+
+    async function initBooks() {
+      // 1. Instant load from localStorage
+      let localBooks: Book[] = seededBooks;
+      try {
+        const saved = localStorage.getItem(BOOKS_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved) as Book[];
+          localBooks = parsed.map((book) => ({
+            ...book,
+            genre: book.genre || seedGenreMap[book.title] || "Fiction",
+          }));
+        }
+      } catch {
+        localBooks = seededBooks;
       }
-    } catch {
-      setBooks(seededBooks);
+      setBooks(localBooks);
+      setHydrated(true);
+
+      // 2. Fetch live data from Supabase
+      if (isSupabaseConfigured) {
+        try {
+          const dbRows = await fetchBooksFromDb();
+          if (cancelled) return;
+          if (dbRows && dbRows.length > 0) {
+            const cloudBooks = dbRows.map(rowToBook);
+            setBooks(cloudBooks);
+            localStorage.setItem(BOOKS_KEY, JSON.stringify(cloudBooks.map((b) => ({ ...b, loading: false }))));
+          } else if (dbRows && dbRows.length === 0) {
+            // First run: seed cloud database so other profiles see initial shelf
+            const seedRows = localBooks.map(bookToRow);
+            await seedBooksInDb(seedRows);
+          }
+        } catch (err) {
+          console.error("Supabase sync error:", err);
+        }
+      }
     }
-    setHydrated(true);
+
+    void initBooks();
+
+    // 3. Setup real-time listener for live sync across browser profiles
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    if (isSupabaseConfigured && supabase) {
+      channel = supabase
+        .channel("books-realtime")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "books" },
+          (payload) => {
+            if (payload.eventType === "INSERT") {
+              const newBook = rowToBook(payload.new as DbBookRow);
+              setBooks((current) => {
+                if (current.some((b) => b.id === newBook.id)) return current;
+                return [newBook, ...current];
+              });
+            } else if (payload.eventType === "UPDATE") {
+              const updatedBook = rowToBook(payload.new as DbBookRow);
+              setBooks((current) =>
+                current.map((b) => (b.id === updatedBook.id ? { ...b, ...updatedBook } : b))
+              );
+            } else if (payload.eventType === "DELETE") {
+              const deletedId = (payload.old as { id?: string })?.id;
+              if (deletedId) {
+                setBooks((current) => current.filter((b) => b.id !== deletedId));
+              }
+            }
+          }
+        )
+        .subscribe();
+    }
+
+    return () => {
+      cancelled = true;
+      if (channel && supabase) {
+        void supabase.removeChannel(channel);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -586,7 +696,12 @@ function Index() {
         if (cancelled) return;
         setBooks((current) => current.map((book) => {
           const index = batch.findIndex((item) => item.id === book.id);
-          return index >= 0 ? { ...book, ...results[index], loading: false } : book;
+          if (index >= 0) {
+            const updated = { ...book, ...results[index], loading: false };
+            if (isSupabaseConfigured) void saveBookToDb(bookToRow(updated));
+            return updated;
+          }
+          return book;
         }));
       }
     };
@@ -617,12 +732,16 @@ function Index() {
       .sort((a, b) => sort === "title" ? a.title.localeCompare(b.title) : sort === "author" ? a.author.localeCompare(b.author) : b.addedAt - a.addedAt);
   }, [books, shelf, selectedGenre, query, sort]);
 
-
   const toggleStatus = (id: string) => {
     const target = books.find((book) => book.id === id);
     if (!target) return;
     const isCompleting = target.status === "TBR";
-    setBooks((current) => current.map((book) => book.id === id ? { ...book, status: isCompleting ? "Completed" : "TBR" } : book));
+    const nextStatus: Status = isCompleting ? "Completed" : "TBR";
+    const updated = { ...target, status: nextStatus };
+    setBooks((current) => current.map((book) => book.id === id ? updated : book));
+    if (isSupabaseConfigured) {
+      void saveBookToDb(bookToRow(updated));
+    }
     if (isCompleting) {
       setCelebrating(id);
       window.setTimeout(() => setCelebrating(null), 900);
@@ -633,39 +752,89 @@ function Index() {
   const removeBook = (book: Book) => {
     if (window.confirm(`Remove "${book.title}" from your nook?`)) {
       setBooks((current) => current.filter((item) => item.id !== book.id));
-      if (book.hasPdf) void deletePdf(book.id);
+      if (book.hasPdf) {
+        void deletePdf(book.id);
+        if (isSupabaseConfigured) void deletePdfFromStorage(book.id);
+      }
+      if (isSupabaseConfigured) {
+        void deleteBookFromDb(book.id);
+      }
       toast("Book removed", { description: book.title });
     }
   };
 
-  const addBook = (book: Book) => {
+  const addBook = async (book: Book, pdfFile?: File | null) => {
     setBooks((current) => [book, ...current]);
     toast.success("Book tucked onto your shelf!", { description: book.title });
+
+    if (pdfFile && isSupabaseConfigured) {
+      void uploadPdfToStorage(book.id, pdfFile);
+    }
+    if (isSupabaseConfigured) {
+      void saveBookToDb(bookToRow(book));
+    }
+
     if (!book.cover) {
-      void fetchBookMeta(book.title, book.author).then((meta) => setBooks((current) => current.map((item) => item.id === book.id ? { ...item, ...meta, loading: false } : item)));
+      void fetchBookMeta(book.title, book.author).then((meta) => {
+        setBooks((current) => current.map((item) => {
+          if (item.id === book.id) {
+            const updated = { ...item, ...meta, loading: false };
+            if (isSupabaseConfigured) void saveBookToDb(bookToRow(updated));
+            return updated;
+          }
+          return item;
+        }));
+      });
     }
   };
 
-  const saveBook = (updated: Book) => {
+  const saveBook = async (updated: Book, pdfFile?: File | null, pdfRemoved?: boolean) => {
     setBooks((current) => current.map((book) => book.id === updated.id ? { ...book, ...updated } : book));
     toast.success("Updated!", { description: `${updated.title} has been saved.` });
+
+    if (pdfFile && isSupabaseConfigured) {
+      void uploadPdfToStorage(updated.id, pdfFile);
+    } else if (pdfRemoved && isSupabaseConfigured) {
+      void deletePdfFromStorage(updated.id);
+    }
+
+    if (isSupabaseConfigured) {
+      void saveBookToDb(bookToRow(updated));
+    }
+
     if (!updated.cover) {
-      void fetchBookMeta(updated.title, updated.author).then((meta) => setBooks((current) => current.map((item) => item.id === updated.id ? { ...item, ...meta, loading: false } : item)));
+      void fetchBookMeta(updated.title, updated.author).then((meta) => {
+        setBooks((current) => current.map((item) => {
+          if (item.id === updated.id) {
+            const withMeta = { ...item, ...meta, loading: false };
+            if (isSupabaseConfigured) void saveBookToDb(bookToRow(withMeta));
+            return withMeta;
+          }
+          return item;
+        }));
+      });
     }
   };
 
   const openPdf = async (bookId: string) => {
     try {
+      if (isSupabaseConfigured) {
+        const publicUrl = await getPdfUrlFromStorage(bookId);
+        if (publicUrl) {
+          window.open(publicUrl, "_blank");
+          return;
+        }
+      }
       const blob = await getPdf(bookId);
       if (!blob) { toast.error("PDF not found", { description: "The file may have been cleared." }); return; }
       const url = URL.createObjectURL(blob);
       window.open(url, "_blank");
-      // Revoke after a short delay to allow the tab to load
       window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
     } catch {
       toast.error("Couldn't open PDF", { description: "Something went wrong reading from storage." });
     }
   };
+
 
   const handleEditOpen = (book: Book) => {
     setEditingBook(book);
@@ -679,7 +848,16 @@ function Index() {
     <main className="min-h-screen overflow-hidden bg-cream text-ink">
       <header className="site-header">
         <a href="#top" className="logo-mark" aria-label="The Book Nook home"><span>THE</span> BOOK NOOK <BookOpen /></a>
-        <nav className="hidden items-center gap-8 md:flex"><a href="#shelves">My shelf</a><a href="#quote">Bookish wisdom</a></nav>
+        <nav className="hidden items-center gap-8 md:flex">
+          <a href="#shelves">My shelf</a>
+          <a href="#quote">Bookish wisdom</a>
+          {isSupabaseConfigured && (
+            <span className="inline-flex items-center gap-1.5 text-[0.7rem] font-bold text-ink uppercase bg-mint px-2.5 py-0.5 rounded-full border border-ink shadow-[1px_1px_0_var(--ink)]">
+              <span className="w-1.5 h-1.5 rounded-full bg-green animate-pulse" /> Cloud Sync
+            </span>
+          )}
+        </nav>
+
         <Button onClick={() => setModalOpen(true)} className="rounded-full border-2 border-ink bg-coral px-5 font-display text-ink shadow-button hover:bg-coral/90">+ Add a Book</Button>
       </header>
 
