@@ -161,7 +161,7 @@ export const Route = createFileRoute("/")({
     ],
   }),
   component: Index,
-}));
+});
 
 function ReaderIllustration({ side }: { side: "left" | "right" }) {
   return (
