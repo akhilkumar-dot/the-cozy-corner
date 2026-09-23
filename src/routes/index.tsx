@@ -602,7 +602,7 @@ function Index() {
     let cancelled = false;
 
     async function initBooks() {
-      // 1. Instant load from localStorage
+      // 1. Instant load from localStorage — show books immediately, no flash
       let localBooks: Book[] = seededBooks;
       try {
         const saved = localStorage.getItem(BOOKS_KEY);
@@ -619,22 +619,38 @@ function Index() {
       setBooks(localBooks);
       setHydrated(true);
 
-      // 2. Fetch live data from Supabase
+      // 2. Merge-first Supabase sync
+      // Strategy: push ALL local books up to Supabase first (upsert = safe for existing rows),
+      // then fetch the full cloud list back. This ensures books added on ANY device or
+      // browser profile before Supabase was connected are never lost.
       if (isSupabaseConfigured) {
         try {
+          // Only upsert local books that aren't just the bare seed defaults
+          // (i.e. skip if local is exactly seededBooks with no user additions)
+          const isOnlyDefaults =
+            localBooks.length === seededBooks.length &&
+            localBooks.every((b) => b.id.startsWith("seed-"));
+
+          if (!isOnlyDefaults && localBooks.length > 0) {
+            // Push local books to Supabase (upsert – won't overwrite cloud-only books)
+            await seedBooksInDb(localBooks.map(bookToRow));
+          }
+
+          // Fetch the full merged list from Supabase
           const dbRows = await fetchBooksFromDb();
           if (cancelled) return;
+
           if (dbRows && dbRows.length > 0) {
             const cloudBooks = dbRows.map(rowToBook);
             setBooks(cloudBooks);
             localStorage.setItem(BOOKS_KEY, JSON.stringify(cloudBooks.map((b) => ({ ...b, loading: false }))));
-          } else if (dbRows && dbRows.length === 0) {
-            // First run: seed cloud database so other profiles see initial shelf
-            const seedRows = localBooks.map(bookToRow);
-            await seedBooksInDb(seedRows);
+          } else {
+            // Cloud is empty — seed it with local books
+            await seedBooksInDb(localBooks.map(bookToRow));
           }
         } catch (err) {
           console.error("Supabase sync error:", err);
+          // Gracefully keep showing local books on error
         }
       }
     }
@@ -818,6 +834,16 @@ function Index() {
 
   const openPdf = async (bookId: string) => {
     try {
+      // 1. Check local IndexedDB first (works offline & preserves existing local PDFs)
+      const blob = await getPdf(bookId);
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        window.open(url, "_blank");
+        window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+        return;
+      }
+
+      // 2. Fall back to Supabase Storage if opened on another device/profile
       if (isSupabaseConfigured) {
         const publicUrl = await getPdfUrlFromStorage(bookId);
         if (publicUrl) {
@@ -825,11 +851,8 @@ function Index() {
           return;
         }
       }
-      const blob = await getPdf(bookId);
-      if (!blob) { toast.error("PDF not found", { description: "The file may have been cleared." }); return; }
-      const url = URL.createObjectURL(blob);
-      window.open(url, "_blank");
-      window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+
+      toast.error("PDF not found", { description: "The file may have been cleared or not uploaded." });
     } catch {
       toast.error("Couldn't open PDF", { description: "Something went wrong reading from storage." });
     }
