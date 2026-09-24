@@ -853,9 +853,11 @@ function Index() {
         void handleMigrate();
       }
     }
-    let channel: ReturnType<NonNullable<typeof supabase>["channel"]> | null = null;
+    let booksChannel: ReturnType<NonNullable<typeof supabase>["channel"]> | null = null;
+    let prefsChannel: ReturnType<NonNullable<typeof supabase>["channel"]> | null = null;
     if (isSupabaseConfigured && supabase) {
-      channel = supabase
+      // ── Books realtime ────────────────────────────────────────────────
+      booksChannel = supabase
         .channel("books-realtime")
         .on(
           "postgres_changes",
@@ -894,12 +896,40 @@ function Index() {
           }
         )
         .subscribe();
+
+      // ── User prefs realtime (current read + up-next cross-device sync) ─
+      prefsChannel = supabase
+        .channel("user-prefs-realtime")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "user_prefs", filter: "id=eq.default" },
+          (payload) => {
+            if (payload.eventType === "UPDATE" || payload.eventType === "INSERT") {
+              const row = payload.new as { current_read_id?: string | null; up_next_ids?: string[] };
+              // Sync current read to this tab
+              if (row.current_read_id !== undefined) {
+                setCurrentReadId(row.current_read_id ?? null);
+                if (row.current_read_id) {
+                  localStorage.setItem("book-nook-current-read-v1", row.current_read_id);
+                }
+              }
+              // Sync up-next list to this tab (cap at 3 defensively)
+              if (Array.isArray(row.up_next_ids)) {
+                const capped = row.up_next_ids.slice(0, 3);
+                setUpNextIds(capped);
+                localStorage.setItem("book-nook-up-next-v1", JSON.stringify(capped));
+              }
+            }
+          }
+        )
+        .subscribe();
     }
 
     return () => {
       cancelled = true;
-      if (channel && supabase) {
-        void supabase.removeChannel(channel);
+      if (supabase) {
+        if (booksChannel) void supabase.removeChannel(booksChannel);
+        if (prefsChannel) void supabase.removeChannel(prefsChannel);
       }
     };
   }, []);
