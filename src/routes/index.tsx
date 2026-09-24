@@ -267,6 +267,8 @@ function readCache(): Record<string, BookMeta> {
   }
 }
 
+let googleRateLimitedUntil = 0;
+
 async function fetchBookMeta(title: string, author: string): Promise<BookMeta> {
   const key = `${title}|${author}`.toLowerCase();
   const cache = readCache();
@@ -274,24 +276,32 @@ async function fetchBookMeta(title: string, author: string): Promise<BookMeta> {
 
   let result: BookMeta = { cover: "", description: defaultDescription };
   try {
-    const query = encodeURIComponent(`intitle:${title} inauthor:${author}`);
-    const google = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=1`);
-    if (google.ok) {
-      const data = await google.json();
-      const info = data.items?.[0]?.volumeInfo;
-      const thumb = info?.imageLinks?.thumbnail as string | undefined;
-      const category = info?.categories?.[0];
-      let genreCandidate: string | undefined;
-      if (category) {
-        const parts = category.split("/").map((s: string) => s.trim());
-        genreCandidate = parts[parts.length - 1] || parts[0];
+    const isGoogleBlocked = Date.now() < googleRateLimitedUntil;
+    if (!isGoogleBlocked) {
+      const query = encodeURIComponent(`intitle:${title} inauthor:${author}`);
+      const google = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=1`);
+      if (google.status === 429) {
+        // Back off Google Books API for 60 seconds to avoid repeating 429 errors
+        googleRateLimitedUntil = Date.now() + 60_000;
+      } else if (google.ok) {
+        const data = await google.json();
+        const info = data.items?.[0]?.volumeInfo;
+        const thumb = info?.imageLinks?.thumbnail as string | undefined;
+        const category = info?.categories?.[0];
+        let genreCandidate: string | undefined;
+        if (category) {
+          const parts = category.split("/").map((s: string) => s.trim());
+          genreCandidate = parts[parts.length - 1] || parts[0];
+        }
+        result = {
+          cover: thumb ? thumb.replace("http://", "https://").replace("zoom=1", "zoom=2") : "",
+          description: info?.description || defaultDescription,
+          genre: genreCandidate,
+        };
       }
-      result = {
-        cover: thumb ? thumb.replace("http://", "https://").replace("zoom=1", "zoom=2") : "",
-        description: info?.description || defaultDescription,
-        genre: genreCandidate,
-      };
     }
+
+    // Fallback to OpenLibrary if Google Books was blocked (429) or lacked cover
     if (!result.cover) {
       const openLibrary = await fetch(
         `https://openlibrary.org/search.json?title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}&limit=1`,
@@ -859,6 +869,8 @@ function Index() {
           }
           return book;
         }));
+        // Gentle delay between batches to respect external API rate limits
+        await new Promise((r) => setTimeout(r, 600));
       }
     };
     void enrich();
