@@ -6,6 +6,7 @@ import {
   BookOpen,
   Check,
   ChevronDown,
+  ChevronRight,
   FileText,
   ImagePlus,
   Library,
@@ -908,6 +909,16 @@ function Index() {
   const tbr = books.length - completed;
   const rhythm = books.length ? Math.round((completed / books.length) * 100) : 0;
 
+  // Hero dashboard data
+  const currentBook = useMemo(
+    () => books.find((b) => b.status === "TBR") ?? books[0] ?? null,
+    [books]
+  );
+  const upNextBooks = useMemo(() => {
+    const first = books.find((b) => b.status === "TBR");
+    return books.filter((b) => b.status === "TBR" && b.id !== first?.id).slice(0, 3);
+  }, [books]);
+
   const availableGenres = useMemo(() => {
     const set = new Set<string>();
     books.forEach((b) => {
@@ -1097,15 +1108,97 @@ function Index() {
       </header>
 
       <section id="top" className="hero-section">
-        <div className="sticker sticker-star">✦</div><div className="sticker sticker-heart">♥</div><div className="sticker sticker-book">BOOK<br />LOVER</div>
-        <ReaderIllustration side="left" />
-        <div className="hero-copy">
-          <div className="eyebrow"><Sparkles /> A QUIET CORNER FOR YOUR STORIES</div>
-          <h1>Your library,<br /><span>lately.</span></h1>
-          <p>Keep every maybe, someday, and couldn't-put-it-down read in one happy little place.</p>
-          <Button onClick={() => document.getElementById("shelves")?.scrollIntoView({ behavior: "smooth" })} className="hero-button">Browse my shelf <ChevronDown /></Button>
+        {/* ── Left: headline text ── */}
+        <div className="hero-text">
+          <div className="eyebrow"><Sparkles /> A quiet corner for loud stories</div>
+          <h1>A life lived in<br /><span>chapters.</span></h1>
+          <p>Keep every maybe, someday, and couldn't-put-it-down read in one beautifully unruly place.</p>
+          <button
+            className="hero-browse-link"
+            onClick={() => document.getElementById("shelves")?.scrollIntoView({ behavior: "smooth" })}
+          >
+            BROWSE MY SHELF <ChevronRight size={14} />
+          </button>
+          <div className="hero-text-sticker">📌</div>
         </div>
-        <ReaderIllustration side="right" />
+
+        {/* ── Right: Dashboard ── */}
+        <div className="hero-dashboard">
+
+          {/* Currently Reading */}
+          <div className="hero-card hcard-reading">
+            <div className="hcard-label">● CURRENTLY READING</div>
+            <div className="hcard-reading-body">
+              {currentBook?.cover && !currentBook.loading
+                ? <img src={currentBook.cover} alt={currentBook.title} className="hcard-book-img" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                : <div className="hcard-book-img hcard-book-img--empty"><BookOpen size={28} /></div>
+              }
+              <div className="hcard-reading-info">
+                <h3>{currentBook?.title ?? "Add your first book"}</h3>
+                <p className="hcard-author">{currentBook?.author ?? "Click '+ Add a Book' to get started"}</p>
+                {currentBook?.description && currentBook.description !== defaultDescription && (
+                  <blockquote className="hcard-quote">"{currentBook.description.replace(/<[^>]*>/g, " ").slice(0, 90).trim()}…"</blockquote>
+                )}
+                <div className="hcard-progress-wrap">
+                  <div className="hcard-progress-bar">
+                    <div className="hcard-progress-fill" style={{ width: `${rhythm}%` }} />
+                  </div>
+                  <span className="hcard-progress-pct">{rhythm}%</span>
+                </div>
+                <p className="hcard-progress-label">{completed} of {books.length} finished · {tbr} left to read</p>
+              </div>
+            </div>
+          </div>
+
+          {/* 2×2 stat mini-cards */}
+          <div className="hero-stats-grid">
+            <div className="hstat hstat--mint">
+              <span>FINISHED</span>
+              <strong>{completed}</strong>
+            </div>
+            <div className="hstat hstat--yellow">
+              <span>IN THE QUEUE</span>
+              <strong>{tbr}</strong>
+            </div>
+            <div className="hstat hstat--dark">
+              <span>TOTAL BOOKS</span>
+              <strong>{books.length}</strong>
+            </div>
+            <div className="hstat hstat--sky">
+              <span>READING %</span>
+              <strong>{rhythm}%</strong>
+            </div>
+          </div>
+
+          {/* Bottom: Up next + Wishlist */}
+          <div className="hero-bottom-row">
+            <div className="hero-card hcard-queue">
+              <div className="hcard-queue-header">
+                <span className="hcard-queue-title">Up next</span>
+                <button
+                  className="hcard-queue-viewall"
+                  onClick={() => document.getElementById("shelves")?.scrollIntoView({ behavior: "smooth" })}
+                >VIEW ALL</button>
+              </div>
+              {upNextBooks.length > 0 ? upNextBooks.map((b, i) => (
+                <div key={b.id} className="hcard-queue-item" onClick={() => handleEditOpen(b)} role="button" tabIndex={0}>
+                  <span className="hqueue-num">0{i + 1}</span>
+                  <span className="hqueue-title">{b.title}</span>
+                  <ChevronRight size={13} className="hqueue-arrow" />
+                </div>
+              )) : (
+                <p className="hqueue-empty">Your queue is all clear ✓</p>
+              )}
+            </div>
+
+            <div className="hero-card hcard-wishlist" onClick={() => setModalOpen(true)} role="button" tabIndex={0}>
+              <BookHeart size={34} className="hcard-wishlist-icon" />
+              <h3>Book wishlist</h3>
+              <p>A soft landing place for future favorites.</p>
+            </div>
+          </div>
+
+        </div>
       </section>
 
       <section className="stats-strip" aria-label="Reading statistics">
