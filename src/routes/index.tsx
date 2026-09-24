@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   ArrowDownAZ,
+  Bookmark,
   BookHeart,
   BookOpen,
   Check,
@@ -45,7 +46,7 @@ import {
   type DbBookRow,
 } from "@/lib/supabase";
 
-type Status = "TBR" | "Completed";
+type Status = "TBR" | "Reading" | "Completed";
 type Shelf = "All" | Status;
 type SortMode = "recent" | "title" | "author";
 
@@ -646,6 +647,7 @@ function BookModal({ open, onOpenChange, onAdd, onSave, editBook }: BookModalPro
                 key={`status-${editBook?.id ?? "new"}-${open ? "open" : "closed"}`}
               >
                 <option value="TBR">To Be Read</option>
+                <option value="Reading">Currently Reading</option>
                 <option value="Completed">Completed</option>
               </select>
             </label>
@@ -687,6 +689,15 @@ function Index() {
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [migrating, setMigrating] = useState(false);
   const [migrationStatus, setMigrationStatus] = useState<string | null>(null);
+  const [upNextIds, setUpNextIds] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem("book-nook-up-next-v1") ?? "[]") as string[]; }
+    catch { return []; }
+  });
+
+  // Persist up-next list to localStorage
+  useEffect(() => {
+    localStorage.setItem("book-nook-up-next-v1", JSON.stringify(upNextIds));
+  }, [upNextIds]);
 
   const handleMigrate = async () => {
     if (migrating || !isSupabaseConfigured) return;
@@ -905,19 +916,28 @@ function Index() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated]);
 
-  const completed = books.filter((book) => book.status === "Completed").length;
-  const tbr = books.length - completed;
-  const rhythm = books.length ? Math.round((completed / books.length) * 100) : 0;
+  const completed = books.filter((b) => b.status === "Completed").length;
+  const reading  = books.filter((b) => b.status === "Reading").length;
+  const tbr      = books.filter((b) => b.status === "TBR").length;
+  const rhythm   = books.length ? Math.round((completed / books.length) * 100) : 0;
 
   // Hero dashboard data
   const currentBook = useMemo(
-    () => books.find((b) => b.status === "TBR") ?? books[0] ?? null,
+    () => books.find((b) => b.status === "Reading") ?? null,
     [books]
   );
-  const upNextBooks = useMemo(() => {
-    const first = books.find((b) => b.status === "TBR");
-    return books.filter((b) => b.status === "TBR" && b.id !== first?.id).slice(0, 3);
-  }, [books]);
+  const upNextBooks = useMemo(
+    () => upNextIds.map((id) => books.find((b) => b.id === id)).filter((b): b is Book => !!b),
+    [books, upNextIds]
+  );
+
+  const toggleUpNext = (bookId: string) => {
+    setUpNextIds((prev) => {
+      if (prev.includes(bookId)) return prev.filter((id) => id !== bookId);
+      if (prev.length >= 3) { toast("Queue is full (max 3)", { description: "Remove a book from Up Next first." }); return prev; }
+      return [...prev, bookId];
+    });
+  };
 
   const availableGenres = useMemo(() => {
     const set = new Set<string>();
@@ -939,18 +959,21 @@ function Index() {
   const toggleStatus = (id: string) => {
     const target = books.find((book) => book.id === id);
     if (!target) return;
-    const isCompleting = target.status === "TBR";
-    const nextStatus: Status = isCompleting ? "Completed" : "TBR";
+    const nextStatus: Status =
+      target.status === "TBR" ? "Reading" :
+      target.status === "Reading" ? "Completed" : "TBR";
     const updated = { ...target, status: nextStatus };
     setBooks((current) => current.map((book) => book.id === id ? updated : book));
-    if (isSupabaseConfigured) {
-      void saveBookToDb(bookToRow(updated));
-    }
-    if (isCompleting) {
+    if (isSupabaseConfigured) void saveBookToDb(bookToRow(updated));
+    if (nextStatus === "Completed") {
       setCelebrating(id);
       window.setTimeout(() => setCelebrating(null), 900);
       toast.success("Another story finished!", { description: `${target.title} moved to Completed.` });
-    } else toast("Back on your reading list", { description: target.title });
+    } else if (nextStatus === "Reading") {
+      toast("Now reading! 📚", { description: target.title });
+    } else {
+      toast("Moved back to TBR", { description: target.title });
+    }
   };
 
   const removeBook = (book: Book) => {
@@ -1122,56 +1145,50 @@ function Index() {
           <div className="hero-text-sticker">📌</div>
         </div>
 
-        {/* ── Right: Dashboard ── */}
+        {/* ── Right: Dashboard (2-col: left=reading+queue, right=stats+wishlist) ── */}
         <div className="hero-dashboard">
 
-          {/* Currently Reading */}
-          <div className="hero-card hcard-reading">
-            <div className="hcard-label">● CURRENTLY READING</div>
-            <div className="hcard-reading-body">
-              {currentBook?.cover && !currentBook.loading
-                ? <img src={currentBook.cover} alt={currentBook.title} className="hcard-book-img" onError={(e) => { e.currentTarget.style.display = "none"; }} />
-                : <div className="hcard-book-img hcard-book-img--empty"><BookOpen size={28} /></div>
-              }
-              <div className="hcard-reading-info">
-                <h3>{currentBook?.title ?? "Add your first book"}</h3>
-                <p className="hcard-author">{currentBook?.author ?? "Click '+ Add a Book' to get started"}</p>
-                {currentBook?.description && currentBook.description !== defaultDescription && (
-                  <blockquote className="hcard-quote">"{currentBook.description.replace(/<[^>]*>/g, " ").slice(0, 90).trim()}…"</blockquote>
-                )}
-                <div className="hcard-progress-wrap">
-                  <div className="hcard-progress-bar">
-                    <div className="hcard-progress-fill" style={{ width: `${rhythm}%` }} />
+          {/* LEFT column: Currently Reading + Up Next */}
+          <div className="hd-left">
+
+            {/* Currently Reading */}
+            <div className="hero-card hcard-reading">
+              <div className="hcard-label">● CURRENTLY READING</div>
+              {currentBook ? (
+                <div className="hcard-reading-body">
+                  {currentBook.cover && !currentBook.loading
+                    ? <img src={currentBook.cover} alt={currentBook.title} className="hcard-book-img" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                    : <div className="hcard-book-img hcard-book-img--empty"><BookOpen size={28} /></div>
+                  }
+                  <div className="hcard-reading-info">
+                    <h3>{currentBook.title}</h3>
+                    <p className="hcard-author">{currentBook.author}</p>
+                    {currentBook.description && currentBook.description !== defaultDescription && (
+                      <blockquote className="hcard-quote">"{currentBook.description.replace(/<[^>]*>/g, " ").slice(0, 80).trim()}…"</blockquote>
+                    )}
+                    <p className="hcard-progress-label-top">PROGRESS</p>
+                    <div className="hcard-progress-wrap">
+                      <div className="hcard-progress-bar">
+                        <div className="hcard-progress-fill" style={{ width: `${rhythm}%` }} />
+                      </div>
+                      <span className="hcard-progress-pct">{rhythm}%</span>
+                    </div>
+                    <p className="hcard-progress-label">{completed} of {books.length} books finished</p>
+                    <button className="hcard-update-btn" onClick={() => handleEditOpen(currentBook)}>
+                      📖 Update progress
+                    </button>
                   </div>
-                  <span className="hcard-progress-pct">{rhythm}%</span>
                 </div>
-                <p className="hcard-progress-label">{completed} of {books.length} finished · {tbr} left to read</p>
-              </div>
+              ) : (
+                <div className="hcard-reading-empty">
+                  <BookOpen size={32} />
+                  <p>No book selected yet</p>
+                  <span>Open a book card and tap <strong>"Start reading"</strong> to set it here.</span>
+                </div>
+              )}
             </div>
-          </div>
 
-          {/* 2×2 stat mini-cards */}
-          <div className="hero-stats-grid">
-            <div className="hstat hstat--mint">
-              <span>FINISHED</span>
-              <strong>{completed}</strong>
-            </div>
-            <div className="hstat hstat--yellow">
-              <span>IN THE QUEUE</span>
-              <strong>{tbr}</strong>
-            </div>
-            <div className="hstat hstat--dark">
-              <span>TOTAL BOOKS</span>
-              <strong>{books.length}</strong>
-            </div>
-            <div className="hstat hstat--sky">
-              <span>READING %</span>
-              <strong>{rhythm}%</strong>
-            </div>
-          </div>
-
-          {/* Bottom: Up next + Wishlist */}
-          <div className="hero-bottom-row">
+            {/* Up Next */}
             <div className="hero-card hcard-queue">
               <div className="hcard-queue-header">
                 <span className="hcard-queue-title">Up next</span>
@@ -1183,19 +1200,51 @@ function Index() {
               {upNextBooks.length > 0 ? upNextBooks.map((b, i) => (
                 <div key={b.id} className="hcard-queue-item" onClick={() => handleEditOpen(b)} role="button" tabIndex={0}>
                   <span className="hqueue-num">0{i + 1}</span>
-                  <span className="hqueue-title">{b.title}</span>
+                  <div className="hqueue-info">
+                    <span className="hqueue-title">{b.title}</span>
+                    {b.author && <span className="hqueue-author">{b.author}</span>}
+                  </div>
                   <ChevronRight size={13} className="hqueue-arrow" />
                 </div>
               )) : (
-                <p className="hqueue-empty">Your queue is all clear ✓</p>
+                <div className="hqueue-empty-state">
+                  <p>Pin up to 3 books using the <Bookmark size={11} /> bookmark button on any book card.</p>
+                </div>
               )}
             </div>
 
+          </div>
+
+          {/* RIGHT column: 2×2 Stats + Wishlist */}
+          <div className="hd-right">
+
+            {/* 2×2 stat mini-cards */}
+            <div className="hero-stats-grid">
+              <div className="hstat hstat--mint">
+                <span>FINISHED</span>
+                <strong>{completed}</strong>
+              </div>
+              <div className="hstat hstat--yellow">
+                <span>IN THE QUEUE</span>
+                <strong>{tbr}</strong>
+              </div>
+              <div className="hstat hstat--dark">
+                <span>DAY STREAK</span>
+                <strong>{reading > 0 ? "📚" : books.length}</strong>
+              </div>
+              <div className="hstat hstat--sky">
+                <span>PAGES READ</span>
+                <strong>{completed > 0 ? `${(completed * 312 / 1000).toFixed(1)}k` : "0"}</strong>
+              </div>
+            </div>
+
+            {/* Book Wishlist */}
             <div className="hero-card hcard-wishlist" onClick={() => setModalOpen(true)} role="button" tabIndex={0}>
-              <BookHeart size={34} className="hcard-wishlist-icon" />
+              <BookHeart size={36} className="hcard-wishlist-icon" />
               <h3>Book wishlist</h3>
               <p>A soft landing place for future favorites.</p>
             </div>
+
           </div>
 
         </div>
@@ -1223,7 +1272,7 @@ function Index() {
         </div>
         <div className="shelf-tools">
           <div className="shelf-tabs" role="tablist" aria-label="Book shelves">
-            {(["All", "TBR", "Completed"] as Shelf[]).map((item) => <Button key={item} variant="ghost" role="tab" aria-selected={shelf === item} onClick={() => setShelf(item)} className={shelf === item ? "active" : ""}>{item === "TBR" ? "To Be Read" : item}</Button>)}
+            {(["All", "TBR", "Reading", "Completed"] as Shelf[]).map((item) => <Button key={item} variant="ghost" role="tab" aria-selected={shelf === item} onClick={() => setShelf(item)} className={shelf === item ? "active" : ""}>{item === "TBR" ? "To Be Read" : item === "Reading" ? "Reading Now" : item}</Button>)}
           </div>
           <label className="search-box"><Search /><span className="sr-only">Search books</span><Input aria-label="Search books" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search title, author, or genre…" />{query && <Button variant="ghost" size="icon" onClick={() => setQuery("")} aria-label="Clear search"><X /></Button>}</label>
           <label className="sort-box"><ArrowDownAZ /><span className="sr-only">Sort books</span><select aria-label="Sort books" value={sort} onChange={(e) => setSort(e.target.value as SortMode)}><option value="recent">Recently added</option><option value="title">Title A–Z</option><option value="author">Author A–Z</option></select></label>
@@ -1258,7 +1307,7 @@ function Index() {
           {visibleBooks.map((book, index) => (
             <article className="book-card" key={book.id}>
               <div className="cover-wrap">
-                <span className={`status-badge ${book.status === "Completed" ? "is-complete" : ""}`}>{book.status}</span>
+                <span className={`status-badge ${book.status === "Completed" ? "is-complete" : book.status === "Reading" ? "is-reading" : ""}`}>{book.status === "Reading" ? "Reading" : book.status}</span>
                 {book.loading ? <div className="cover-skeleton" /> : book.cover ? <><img src={book.cover} alt={`Cover of ${book.title}`} onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.nextElementSibling?.classList.remove("hidden"); }} /><div className="hidden h-full w-full"><BookPlaceholder title={book.title} tone={index} /></div></> : <div className="h-full w-full"><BookPlaceholder title={book.title} tone={index} /></div>}
               </div>
               <div className="book-info">
@@ -1270,9 +1319,23 @@ function Index() {
                 <p className="description">{book.description.replace(/<[^>]*>/g, " ")}</p>
               </div>
               <div className="card-actions">
-                <Button onClick={() => toggleStatus(book.id)} className={book.status === "Completed" ? "status-action is-complete" : "status-action"}>{book.status === "Completed" ? <><BookOpen /> Move to TBR</> : <><Check /> Mark completed</>}</Button>
-                <Button variant="ghost" size="icon" onClick={() => handleEditOpen(book)} aria-label={`Edit ${book.title}`} title="Edit book" className="card-icon-btn"><Pencil /></Button>
-                <Button variant="ghost" size="icon" onClick={() => removeBook(book)} aria-label={`Remove ${book.title}`} title="Remove book" className="card-icon-btn card-icon-btn--danger"><Trash2 /></Button>
+                <Button
+                  onClick={() => toggleStatus(book.id)}
+                  className={book.status === "Completed" ? "status-action is-complete" : book.status === "Reading" ? "status-action is-reading" : "status-action"}
+                >
+                  {book.status === "Completed" ? <><BookOpen size={13} /> TBR</> : book.status === "Reading" ? <><Check size={13} /> Finished</> : <><BookOpen size={13} /> Start reading</>}
+                </Button>
+                <Button
+                  variant="ghost" size="icon"
+                  onClick={() => toggleUpNext(book.id)}
+                  aria-label={upNextIds.includes(book.id) ? "Remove from Up Next" : "Add to Up Next"}
+                  title={upNextIds.includes(book.id) ? "Remove from Up Next" : "Add to Up Next"}
+                  className={`card-icon-btn card-bookmark-btn ${upNextIds.includes(book.id) ? "is-pinned" : ""}`}
+                >
+                  <Bookmark size={14} />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={() => handleEditOpen(book)} aria-label={`Edit ${book.title}`} title="Edit book" className="card-icon-btn"><Pencil size={14} /></Button>
+                <Button variant="ghost" size="icon" onClick={() => removeBook(book)} aria-label={`Remove ${book.title}`} title="Remove book" className="card-icon-btn card-icon-btn--danger"><Trash2 size={14} /></Button>
               </div>
               {book.hasPdf && (
                 <div className="card-pdf-row">
