@@ -50,6 +50,7 @@ import {
 type Status = "TBR" | "Reading" | "Completed";
 type Shelf = "All" | Status;
 type SortMode = "recent" | "title" | "author";
+type HeroPickerMode = "current" | "up-next" | null;
 
 type Book = {
   id: string;
@@ -690,6 +691,8 @@ function Index() {
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [migrating, setMigrating] = useState(false);
   const [migrationStatus, setMigrationStatus] = useState<string | null>(null);
+  const [currentReadId, setCurrentReadId] = useState<string | null>(null);
+  const [heroPickerMode, setHeroPickerMode] = useState<HeroPickerMode>(null);
   const [upNextIds, setUpNextIds] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem("book-nook-up-next-v1") ?? "[]") as string[]; }
     catch { return []; }
@@ -699,6 +702,14 @@ function Index() {
   useEffect(() => {
     localStorage.setItem("book-nook-up-next-v1", JSON.stringify(upNextIds));
   }, [upNextIds]);
+
+  useEffect(() => {
+    setCurrentReadId(localStorage.getItem("book-nook-current-read-v1"));
+  }, []);
+
+  useEffect(() => {
+    if (currentReadId) localStorage.setItem("book-nook-current-read-v1", currentReadId);
+  }, [currentReadId]);
 
   const handleMigrate = async () => {
     if (migrating || !isSupabaseConfigured) return;
@@ -924,8 +935,8 @@ function Index() {
 
   // Hero dashboard data
   const currentBook = useMemo(
-    () => books.find((b) => b.status === "Reading") ?? books[0] ?? null,
-    [books]
+    () => books.find((b) => b.id === currentReadId) ?? books.find((b) => b.status === "Reading") ?? books[0] ?? null,
+    [books, currentReadId]
   );
   const upNextBooks = useMemo(
     () => upNextIds.map((id) => books.find((b) => b.id === id)).filter((b): b is Book => !!b),
@@ -946,6 +957,14 @@ function Index() {
       if (prev.length >= 3) { toast("Queue is full (max 3)", { description: "Remove a book from Up Next first." }); return prev; }
       return [...prev, bookId];
     });
+  };
+
+  const chooseCurrentRead = (book: Book) => {
+    setCurrentReadId(book.id);
+    setBooks((current) => current.map((item) => item.id === book.id ? { ...item, status: "Reading" } : item));
+    if (isSupabaseConfigured) void saveBookToDb(bookToRow({ ...book, status: "Reading" }));
+    setHeroPickerMode(null);
+    toast.success("Current read updated", { description: book.title });
   };
 
   const availableGenres = useMemo(() => {
@@ -1181,7 +1200,10 @@ function Index() {
                 <line x1="0" y1="0" x2="60" y2="60" stroke="var(--ink)" strokeWidth="2.5" />
               </svg>
             </div>
-            <div className="hcard-label">● CURRENTLY READING</div>
+            <div className="hcard-topline">
+              <div className="hcard-label">● CURRENTLY READING</div>
+              <Button type="button" variant="ghost" className="hcard-choose" onClick={() => setHeroPickerMode("current")}>Choose book</Button>
+            </div>
             {currentBook ? (
               <div className="hcard-reading-body">
                 {currentBook.cover && !currentBook.loading
@@ -1233,8 +1255,8 @@ function Index() {
               <strong>8</strong>
             </div>
             <div className="hstat hstat--white">
-              <span>PAGES READ</span>
-              <strong>{completed > 0 ? `${(completed * 342 / 1000).toFixed(1)}k` : "8.2k"}</strong>
+              <span>READING NOW</span>
+              <strong>{reading}</strong>
             </div>
           </div>
 
@@ -1242,10 +1264,7 @@ function Index() {
           <div className="hero-card hcard-queue">
             <div className="hcard-queue-header">
               <span className="hcard-queue-title">Up next</span>
-              <button
-                className="hcard-queue-viewall"
-                onClick={() => document.getElementById("shelves")?.scrollIntoView({ behavior: "smooth" })}
-              >VIEW ALL</button>
+              <Button type="button" variant="ghost" className="hcard-queue-viewall" onClick={() => setHeroPickerMode("up-next")}>CHOOSE BOOKS</Button>
             </div>
             {displayedUpNext.length > 0 ? displayedUpNext.map((b, i) => {
               const badgeClass = i === 0 ? "hqueue-badge--yellow" : i === 1 ? "hqueue-badge--mint" : "hqueue-badge--coral";
@@ -1385,6 +1404,40 @@ function Index() {
         onSave={saveBook}
         editBook={editingBook}
       />
+
+      <Dialog open={heroPickerMode !== null} onOpenChange={(open) => { if (!open) setHeroPickerMode(null); }}>
+        <DialogContent className="hero-picker-dialog max-h-[86vh] overflow-y-auto border-2 border-ink bg-cream shadow-playful sm:max-w-2xl sm:rounded-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display text-3xl">
+              {heroPickerMode === "current" ? "Choose your current read" : "Choose what’s up next"}
+            </DialogTitle>
+            <DialogDescription>
+              {heroPickerMode === "current" ? "Pick one book to feature at the top of your nook." : "Pick up to three books and arrange your immediate reading queue."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="hero-picker-list">
+            {books.map((book) => {
+              const selected = heroPickerMode === "current" ? currentBook?.id === book.id : upNextIds.includes(book.id);
+              return (
+                <Button
+                  key={book.id}
+                  type="button"
+                  variant="ghost"
+                  className={`hero-picker-option ${selected ? "is-selected" : ""}`}
+                  onClick={() => heroPickerMode === "current" ? chooseCurrentRead(book) : toggleUpNext(book.id)}
+                >
+                  <span className="hero-picker-cover">
+                    {book.cover ? <img src={book.cover} alt="" /> : <BookOpen aria-hidden="true" />}
+                  </span>
+                  <span className="hero-picker-copy"><strong>{book.title}</strong><small>{book.author}</small></span>
+                  <span className="hero-picker-check" aria-hidden="true">{selected ? <Check /> : <ChevronRight />}</span>
+                </Button>
+              );
+            })}
+          </div>
+          {heroPickerMode === "up-next" && <p className="hero-picker-count">{upNextIds.length} of 3 selected</p>}
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
