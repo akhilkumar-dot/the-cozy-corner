@@ -29,6 +29,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { deletePdf, getPdf, loadBooksFromIndexedDb, saveBooksToIndexedDb, savePdf } from "@/lib/pdfStore";
+import { migrateEverythingToSupabase } from "@/lib/migrateToSupabase";
 import {
   deleteBookFromDb,
   deletePdfFromStorage,
@@ -672,6 +673,44 @@ function Index() {
   const [modalOpen, setModalOpen] = useState(false);
   const [celebrating, setCelebrating] = useState<string | null>(null);
   const [editingBook, setEditingBook] = useState<Book | null>(null);
+  const [migrating, setMigrating] = useState(false);
+  const [migrationStatus, setMigrationStatus] = useState<string | null>(null);
+
+  const handleMigrate = async () => {
+    if (migrating || !isSupabaseConfigured) return;
+    setMigrating(true);
+    toast.info("Syncing local library to Supabase...", {
+      description: "Uploading covers, PDFs, and book records to cloud storage.",
+    });
+
+    try {
+      const result = await migrateEverythingToSupabase((p) => {
+        if (p.phase === "covers") setMigrationStatus(`Covers ${p.current}/${p.total}`);
+        else if (p.phase === "pdfs") setMigrationStatus(`PDFs ${p.current}/${p.total}`);
+        else if (p.phase === "rows") setMigrationStatus(`Saving ${p.current}/${p.total}`);
+        else if (p.phase === "done") setMigrationStatus(null);
+      });
+
+      const freshRows = await fetchBooksFromDb();
+      if (freshRows && freshRows.length > 0) {
+        const cloudBooks = freshRows.map(rowToBook);
+        setBooks(cloudBooks);
+        safeSaveToLocalStorage(BOOKS_KEY, JSON.stringify(cloudBooks));
+        void saveBooksToIndexedDb(cloudBooks);
+      }
+
+      toast.success("Cloud sync complete!", {
+        description: `Synced ${result.rowsUpserted} books, ${result.coversUploaded} covers, and ${result.pdfsUploaded} PDFs.`,
+      });
+    } catch (err) {
+      toast.error("Sync failed", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setMigrating(false);
+      setMigrationStatus(null);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -968,9 +1007,16 @@ function Index() {
           <a href="#shelves">My shelf</a>
           <a href="#quote">Bookish wisdom</a>
           {isSupabaseConfigured && (
-            <span className="inline-flex items-center gap-1.5 text-[0.7rem] font-bold text-ink uppercase bg-mint px-2.5 py-0.5 rounded-full border border-ink shadow-[1px_1px_0_var(--ink)]">
-              <span className="w-1.5 h-1.5 rounded-full bg-green animate-pulse" /> Cloud Sync
-            </span>
+            <button
+              type="button"
+              onClick={() => void handleMigrate()}
+              disabled={migrating}
+              title="Click to sync all local books, custom covers, and PDFs to Supabase cloud"
+              className="inline-flex items-center gap-1.5 text-[0.7rem] font-bold text-ink uppercase bg-mint hover:bg-mint/80 px-2.5 py-1 rounded-full border border-ink shadow-[1px_1px_0_var(--ink)] cursor-pointer transition-all disabled:opacity-75"
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${migrating ? "bg-coral animate-ping" : "bg-green animate-pulse"}`} />
+              {migrating ? (migrationStatus || "Syncing...") : "Cloud Sync"}
+            </button>
           )}
         </nav>
 

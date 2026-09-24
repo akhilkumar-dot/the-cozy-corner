@@ -98,3 +98,31 @@ export async function deletePdfFromStorage(bookId: string): Promise<void> {
   const path = `${bookId}.pdf`;
   await supabase.storage.from("book-pdfs").remove([path]);
 }
+
+export async function uploadCoverToStorage(bookId: string, blob: Blob): Promise<string | null> {
+  if (!supabase) return null;
+  const path = `${bookId}.jpg`;
+  const { error } = await supabase.storage.from("book-covers").upload(path, blob, {
+    upsert: true,
+    contentType: blob.type || "image/jpeg",
+  });
+  if (error) {
+    console.error("Failed to upload cover to Supabase Storage:", error);
+    return null;
+  }
+  const { data } = supabase.storage.from("book-covers").getPublicUrl(path);
+  return data?.publicUrl ?? null;
+}
+
+export async function getCoverUrlFromStorage(bookId: string): Promise<string | null> {
+  if (!supabase) return null;
+  const path = `${bookId}.jpg`;
+  const { data } = supabase.storage.from("book-covers").getPublicUrl(path);
+  return data?.publicUrl ?? null;
+}
+
+export async function deleteCoverFromStorage(bookId: string): Promise<void> {
+  if (!supabase) return;
+  const path = `${bookId}.jpg`;
+  await supabase.storage.from("book-covers").remove([path]);
+}
