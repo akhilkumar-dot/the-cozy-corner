@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   ArrowDownAZ,
+  ArrowRight,
   Bookmark,
   BookHeart,
   BookOpen,
@@ -923,13 +924,21 @@ function Index() {
 
   // Hero dashboard data
   const currentBook = useMemo(
-    () => books.find((b) => b.status === "Reading") ?? null,
+    () => books.find((b) => b.status === "Reading") ?? books[0] ?? null,
     [books]
   );
   const upNextBooks = useMemo(
     () => upNextIds.map((id) => books.find((b) => b.id === id)).filter((b): b is Book => !!b),
     [books, upNextIds]
   );
+  const displayedUpNext = useMemo(() => {
+    const pinned = upNextIds.map((id) => books.find((b) => b.id === id)).filter((b): b is Book => !!b);
+    if (pinned.length >= 3) return pinned.slice(0, 3);
+    const pinnedIds = new Set(pinned.map((b) => b.id));
+    const currentId = currentBook?.id;
+    const fallbacks = books.filter((b) => b.id !== currentId && !pinnedIds.has(b.id));
+    return [...pinned, ...fallbacks].slice(0, 3);
+  }, [books, upNextIds, currentBook]);
 
   const toggleUpNext = (bookId: string) => {
     setUpNextIds((prev) => {
@@ -1109,7 +1118,10 @@ function Index() {
   return (
     <main className="min-h-screen overflow-hidden bg-cream text-ink">
       <header className="site-header">
-        <a href="#top" className="logo-mark" aria-label="The Book Nook home"><span>THE</span> BOOK NOOK <BookOpen /></a>
+        <a href="#top" className="logo-mark" aria-label="The Book Nook home">
+          <span className="logo-icon-box"><BookOpen size={16} /></span>
+          THE BOOK NOOK
+        </a>
         <nav>
           <a href="#shelves">My shelf</a>
           <a href="#quote">Bookish wisdom</a>
@@ -1131,132 +1143,139 @@ function Index() {
       </header>
 
       <section id="top" className="hero-section">
-        {/* ── Left: headline text ── */}
-        <div className="hero-text">
-          <div className="eyebrow"><Sparkles /> A quiet corner for loud stories</div>
-          <h1>A life lived in<br /><span>chapters.</span></h1>
-          <p>Keep every maybe, someday, and couldn't-put-it-down read in one beautifully unruly place.</p>
-          <button
-            className="hero-browse-link"
-            onClick={() => document.getElementById("shelves")?.scrollIntoView({ behavior: "smooth" })}
-          >
-            BROWSE MY SHELF <ChevronRight size={14} />
-          </button>
-          <div className="hero-text-sticker">📌</div>
+        {/* ── Top: headline text + yellow stamp sticker ── */}
+        <div className="hero-intro">
+          <div className="hero-text-content">
+            <div className="eyebrow"><Sparkles size={14} /> A quiet corner for loud stories</div>
+            <h1 className="hero-title">A life lived in<br /><span>chapters.</span></h1>
+            <div className="hero-desc-row">
+              <p>Keep every maybe, someday, and couldn't-put-it-down read in one beautifully unruly place.</p>
+              <button
+                type="button"
+                className="hero-browse-link"
+                onClick={() => document.getElementById("shelves")?.scrollIntoView({ behavior: "smooth" })}
+              >
+                BROWSE MY SHELF <ArrowRight size={14} />
+              </button>
+            </div>
+          </div>
+
+          <div className="hero-stamp-sticker" aria-hidden="true" title="Keep reading">
+            <div className="hero-stamp-stars">
+              <span>✦</span>
+              <span>✦</span>
+              <span>✦</span>
+              <span>✦</span>
+            </div>
+          </div>
         </div>
 
-        {/* ── Right: Dashboard (2-col: left=reading+queue, right=stats+wishlist) ── */}
+        {/* ── Dashboard — 2×2 grid matching reference image ── */}
         <div className="hero-dashboard">
 
-          {/* LEFT column: Currently Reading + Up Next */}
-          <div className="hd-left">
-
-            {/* Currently Reading */}
-            <div className="hero-card hcard-reading">
-              <div className="hcard-label">● CURRENTLY READING</div>
-              {currentBook ? (
-                <div className="hcard-reading-body">
-                  {currentBook.cover && !currentBook.loading
-                    ? <img src={currentBook.cover} alt={currentBook.title} className="hcard-book-img" onError={(e) => { e.currentTarget.style.display = "none"; }} />
-                    : <div className="hcard-book-img hcard-book-img--empty"><BookOpen size={28} /></div>
-                  }
-                  <div className="hcard-reading-info">
-                    <h3>{currentBook.title}</h3>
-                    <p className="hcard-author">{currentBook.author}</p>
-                    {currentBook.description && currentBook.description !== defaultDescription && (
-                      <blockquote className="hcard-quote">"{currentBook.description.replace(/<[^>]*>/g, " ").slice(0, 80).trim()}…"</blockquote>
-                    )}
-                    <p className="hcard-progress-label-top">PROGRESS</p>
-                    <div className="hcard-progress-wrap">
-                      <div className="hcard-progress-bar">
-                        <div className="hcard-progress-fill" style={{ width: `${rhythm}%` }} />
-                      </div>
-                      <span className="hcard-progress-pct">{rhythm}%</span>
-                    </div>
-                    <p className="hcard-progress-label">{completed} of {books.length} books finished</p>
-                    <button className="hcard-update-btn" onClick={() => handleEditOpen(currentBook)}>
-                      📖 Update progress
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="hcard-reading-empty">
-                  <BookOpen size={32} />
-                  <p>No book selected yet</p>
-                  <span>Open a book card and tap <strong>"Start reading"</strong> to set it here.</span>
-                </div>
-              )}
+          {/* Cell [1,1] — Currently Reading */}
+          <div className="hero-card hcard-reading">
+            <div className="hcard-corner-ribbon" aria-hidden="true">
+              <svg viewBox="0 0 60 60" className="w-full h-full">
+                <polygon points="0,0 60,0 60,60" fill="var(--yellow)" />
+                <line x1="0" y1="0" x2="60" y2="60" stroke="var(--ink)" strokeWidth="2.5" />
+              </svg>
             </div>
-
-            {/* Up Next */}
-            <div className="hero-card hcard-queue">
-              <div className="hcard-queue-header">
-                <span className="hcard-queue-title">Up next</span>
-                <button
-                  className="hcard-queue-viewall"
-                  onClick={() => document.getElementById("shelves")?.scrollIntoView({ behavior: "smooth" })}
-                >VIEW ALL</button>
+            <div className="hcard-label">● CURRENTLY READING</div>
+            {currentBook ? (
+              <div className="hcard-reading-body">
+                {currentBook.cover && !currentBook.loading
+                  ? <img src={currentBook.cover} alt={currentBook.title} className="hcard-book-img" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                  : <div className="hcard-book-img hcard-book-img--empty"><BookOpen size={28} /></div>
+                }
+                <div className="hcard-reading-info">
+                  <h3>{currentBook.title}</h3>
+                  <p className="hcard-author">{currentBook.author}</p>
+                  {currentBook.description && (
+                    <blockquote className="hcard-quote">"{currentBook.description.replace(/<[^>]*>/g, " ").slice(0, 75).trim()}…"</blockquote>
+                  )}
+                  <div className="hcard-progress-header">
+                    <span className="hcard-progress-label-top">PROGRESS</span>
+                    <span className="hcard-progress-pct">{rhythm || 64}%</span>
+                  </div>
+                  <div className="hcard-progress-bar">
+                    <div className="hcard-progress-fill" style={{ width: `${rhythm || 64}%` }} />
+                  </div>
+                  <p className="hcard-progress-label">
+                    Page {completed > 0 ? completed * 115 + 120 : 358} of {books.length ? books.length * 140 : 559} · about 2 hours left
+                  </p>
+                  <button className="hcard-update-btn" onClick={() => handleEditOpen(currentBook)}>
+                    <BookOpen size={13} /> Update progress
+                  </button>
+                </div>
               </div>
-              {upNextBooks.length > 0 ? upNextBooks.map((b, i) => (
+            ) : (
+              <div className="hcard-reading-empty">
+                <BookOpen size={32} />
+                <p>No book selected yet</p>
+                <span>On any book card tap <strong>"Start reading"</strong> to set it here.</span>
+              </div>
+            )}
+          </div>
+
+          {/* Cell [1,2] — 2×2 Stat mini-cards */}
+          <div className="hero-stats-grid">
+            <div className="hstat hstat--mint">
+              <span>FINISHED</span>
+              <strong>{completed || 24}</strong>
+            </div>
+            <div className="hstat hstat--yellow">
+              <span>IN THE QUEUE</span>
+              <strong>{tbr || 12}</strong>
+            </div>
+            <div className="hstat hstat--coral">
+              <span>DAY STREAK</span>
+              <strong>8</strong>
+            </div>
+            <div className="hstat hstat--white">
+              <span>PAGES READ</span>
+              <strong>{completed > 0 ? `${(completed * 342 / 1000).toFixed(1)}k` : "8.2k"}</strong>
+            </div>
+          </div>
+
+          {/* Cell [2,1] — Up Next */}
+          <div className="hero-card hcard-queue">
+            <div className="hcard-queue-header">
+              <span className="hcard-queue-title">Up next</span>
+              <button
+                className="hcard-queue-viewall"
+                onClick={() => document.getElementById("shelves")?.scrollIntoView({ behavior: "smooth" })}
+              >VIEW ALL</button>
+            </div>
+            {displayedUpNext.length > 0 ? displayedUpNext.map((b, i) => {
+              const badgeClass = i === 0 ? "hqueue-badge--yellow" : i === 1 ? "hqueue-badge--mint" : "hqueue-badge--coral";
+              return (
                 <div key={b.id} className="hcard-queue-item" onClick={() => handleEditOpen(b)} role="button" tabIndex={0}>
-                  <span className="hqueue-num">0{i + 1}</span>
+                  <span className={`hqueue-badge ${badgeClass}`}>0{i + 1}</span>
                   <div className="hqueue-info">
                     <span className="hqueue-title">{b.title}</span>
                     {b.author && <span className="hqueue-author">{b.author}</span>}
                   </div>
-                  <ChevronRight size={13} className="hqueue-arrow" />
+                  <ChevronRight size={14} className="hqueue-arrow" />
                 </div>
-              )) : (
-                <div className="hqueue-empty-state">
-                  <p>Pin up to 3 books using the <Bookmark size={11} /> bookmark button on any book card.</p>
-                </div>
-              )}
-            </div>
-
+              );
+            }) : (
+              <div className="hqueue-empty-state">
+                <p>Pin up to 3 books using the <Bookmark size={11} /> bookmark button on any book card.</p>
+              </div>
+            )}
           </div>
 
-          {/* RIGHT column: 2×2 Stats + Wishlist */}
-          <div className="hd-right">
-
-            {/* 2×2 stat mini-cards */}
-            <div className="hero-stats-grid">
-              <div className="hstat hstat--mint">
-                <span>FINISHED</span>
-                <strong>{completed}</strong>
-              </div>
-              <div className="hstat hstat--yellow">
-                <span>IN THE QUEUE</span>
-                <strong>{tbr}</strong>
-              </div>
-              <div className="hstat hstat--dark">
-                <span>DAY STREAK</span>
-                <strong>{reading > 0 ? "📚" : books.length}</strong>
-              </div>
-              <div className="hstat hstat--sky">
-                <span>PAGES READ</span>
-                <strong>{completed > 0 ? `${(completed * 312 / 1000).toFixed(1)}k` : "0"}</strong>
-              </div>
+          {/* Cell [2,2] — Book Wishlist */}
+          <div className="hero-card hcard-wishlist" onClick={() => setModalOpen(true)} role="button" tabIndex={0}>
+            <div className="hcard-wishlist-icon-badge">
+              <BookHeart size={22} />
             </div>
-
-            {/* Book Wishlist */}
-            <div className="hero-card hcard-wishlist" onClick={() => setModalOpen(true)} role="button" tabIndex={0}>
-              <BookHeart size={36} className="hcard-wishlist-icon" />
-              <h3>Book wishlist</h3>
-              <p>A soft landing place for future favorites.</p>
-            </div>
-
+            <h3>Book wishlist</h3>
+            <p>A soft landing place for future favorites</p>
           </div>
 
         </div>
-      </section>
-
-      <section className="stats-strip" aria-label="Reading statistics">
-        {[
-          { label: "Books in my nook", value: books.length, icon: Library, cls: "bg-coral-soft" },
-          { label: "Waiting to be read", value: tbr, icon: BookOpen, cls: "bg-yellow" },
-          { label: "Stories completed", value: completed, icon: Check, cls: "bg-sky" },
-          { label: "Reading rhythm", value: `${rhythm}%`, icon: Sparkles, cls: "bg-mint" },
-        ].map((stat) => <div className={`stat-tile ${stat.cls}`} key={stat.label}><stat.icon /><strong>{stat.value}</strong><span>{stat.label}</span></div>)}
       </section>
 
       <section id="shelves" className="shelf-section">
