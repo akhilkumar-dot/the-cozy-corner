@@ -1,6 +1,7 @@
 const DB_NAME = "book-nook-pdfs";
 const STORE_NAME = "pdfs";
-const DB_VERSION = 1;
+const BOOKS_STORE = "books_data";
+const DB_VERSION = 2;
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -9,6 +10,9 @@ function openDb(): Promise<IDBDatabase> {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME);
+      }
+      if (!db.objectStoreNames.contains(BOOKS_STORE)) {
+        db.createObjectStore(BOOKS_STORE);
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -44,4 +48,34 @@ export async function deletePdf(id: string): Promise<void> {
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
+}
+
+/** Store all books in IndexedDB (has GBs of quota, never hits 5MB localStorage limit) */
+export async function saveBooksToIndexedDb(books: unknown[]): Promise<void> {
+  try {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(BOOKS_STORE, "readwrite");
+      tx.objectStore(BOOKS_STORE).put(books, "all_books");
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.warn("Failed saving books to IndexedDB:", err);
+  }
+}
+
+/** Load all books from IndexedDB */
+export async function loadBooksFromIndexedDb<T>(): Promise<T[] | null> {
+  try {
+    const db = await openDb();
+    return new Promise((resolve) => {
+      const tx = db.transaction(BOOKS_STORE, "readonly");
+      const request = tx.objectStore(BOOKS_STORE).get("all_books");
+      request.onsuccess = () => resolve((request.result as T[]) || null);
+      request.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
 }

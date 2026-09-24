@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { deletePdf, getPdf, savePdf } from "@/lib/pdfStore";
+import { deletePdf, getPdf, loadBooksFromIndexedDb, saveBooksToIndexedDb, savePdf } from "@/lib/pdfStore";
 import {
   deleteBookFromDb,
   deletePdfFromStorage,
@@ -193,6 +193,71 @@ const PDF_SIZE_WARN = 10 * 1024 * 1024; // 10 MB
 
 type BookMeta = { cover: string; description: string; genre?: string };
 
+function safeSaveToLocalStorage(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch (err) {
+    console.warn(`localStorage quota exceeded for "${key}". Recovering space...`, err);
+    try {
+      // 1. Clear non-essential metadata search cache
+      localStorage.removeItem(META_KEY);
+
+      // 2. If it's the books key, strip any inline bulky data: URLs from covers
+      // Full covers remain safely in memory, IndexedDB, and Supabase!
+      if (key === BOOKS_KEY) {
+        const parsed = JSON.parse(value) as Book[];
+        const lightweight = parsed.map((b) => ({
+          ...b,
+          cover: b.cover?.startsWith("data:") ? "" : b.cover,
+        }));
+        localStorage.setItem(key, JSON.stringify(lightweight));
+      } else {
+        localStorage.setItem(key, value);
+      }
+    } catch {
+      // Never throw — in-memory state & IndexedDB / Supabase preserve user data!
+    }
+  }
+}
+
+function compressImageFile(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    if (!file || !file.type.startsWith("image/")) {
+      resolve("");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX_WIDTH = 480;
+        const MAX_HEIGHT = 720;
+        let { width, height } = img;
+        if (width > MAX_WIDTH || height > MAX_HEIGHT) {
+          const ratio = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          // Compress to JPEG 0.8: reduces size from 3MB down to ~25KB (100x smaller!)
+          resolve(canvas.toDataURL("image/jpeg", 0.8));
+          return;
+        }
+        resolve(typeof e.target?.result === "string" ? e.target.result : "");
+      };
+      img.onerror = () => resolve(typeof e.target?.result === "string" ? e.target.result : "");
+      img.src = typeof e.target?.result === "string" ? e.target.result : "";
+    };
+    reader.onerror = () => resolve("");
+    reader.readAsDataURL(file);
+  });
+}
+
 function readCache(): Record<string, BookMeta> {
   try {
     return JSON.parse(localStorage.getItem(META_KEY) ?? "{}");
@@ -240,7 +305,11 @@ async function fetchBookMeta(title: string, author: string): Promise<BookMeta> {
     // The illustrated fallback remains available when a public catalog is offline.
   }
 
-  localStorage.setItem(META_KEY, JSON.stringify({ ...cache, [key]: result }));
+  try {
+    localStorage.setItem(META_KEY, JSON.stringify({ ...cache, [key]: result }));
+  } catch {
+    // Cache write failure ignored if quota full
+  }
   return result;
 }
 
@@ -420,16 +489,23 @@ function BookModal({ open, onOpenChange, onAdd, onSave, editBook }: BookModalPro
     }
   }, [open, isEdit, editBook]);
 
-  const readImageFile = (file?: File) => {
+  const readImageFile = async (file?: File) => {
     if (!file || !file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = () => setCover(typeof reader.result === "string" ? reader.result : "");
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await compressImageFile(file);
+      if (compressed) setCover(compressed);
+    } catch {
+      // Fallback
+      const reader = new FileReader();
+      reader.onload = () => setCover(typeof reader.result === "string" ? reader.result : "");
+      reader.readAsDataURL(file);
+    }
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const data = new FormData(event.currentTarget);
+    const form = event.currentTarget; // Capture form element synchronously before any await
+    const data = new FormData(form);
     const title = String(data.get("title") ?? "").trim();
     const author = String(data.get("author") ?? "").trim();
     if (!title || !author) return;
@@ -483,8 +559,7 @@ function BookModal({ open, onOpenChange, onAdd, onSave, editBook }: BookModalPro
       onAdd?.(book, pdfState.file);
     }
 
-
-    event.currentTarget.reset();
+    form?.reset();
     setCover("");
     setPdfState({ file: null, existingName: null, existingSize: null, removed: false });
     onOpenChange(false);
@@ -602,7 +677,7 @@ function Index() {
     let cancelled = false;
 
     async function initBooks() {
-      // 1. Instant load from localStorage — show books immediately, no flash
+      // 1. Instant load from localStorage & IndexedDB — show books immediately, no flash
       let localBooks: Book[] = seededBooks;
       try {
         const saved = localStorage.getItem(BOOKS_KEY);
@@ -616,10 +691,24 @@ function Index() {
       } catch {
         localBooks = seededBooks;
       }
+
+      // 2. Also check IndexedDB (which has GBs of storage, immune to 5MB localStorage quota)
+      try {
+        const idbBooks = await loadBooksFromIndexedDb<Book>();
+        if (idbBooks && idbBooks.length > 0) {
+          // If IndexedDB has more books or restored covers, prefer IndexedDB
+          if (idbBooks.length >= localBooks.length) {
+            localBooks = idbBooks;
+          }
+        }
+      } catch {
+        // Fallback gracefully
+      }
+
       setBooks(localBooks);
       setHydrated(true);
 
-      // 2. Merge-first Supabase sync
+      // 3. Merge-first Supabase sync
       // Strategy: push ALL local books up to Supabase first (upsert = safe for existing rows),
       // then fetch the full cloud list back. This ensures books added on ANY device or
       // browser profile before Supabase was connected are never lost.
@@ -643,7 +732,8 @@ function Index() {
           if (dbRows && dbRows.length > 0) {
             const cloudBooks = dbRows.map(rowToBook);
             setBooks(cloudBooks);
-            localStorage.setItem(BOOKS_KEY, JSON.stringify(cloudBooks.map((b) => ({ ...b, loading: false }))));
+            safeSaveToLocalStorage(BOOKS_KEY, JSON.stringify(cloudBooks.map((b) => ({ ...b, loading: false }))));
+            void saveBooksToIndexedDb(cloudBooks.map((b) => ({ ...b, loading: false })));
           } else {
             // Cloud is empty — seed it with local books
             await seedBooksInDb(localBooks.map(bookToRow));
@@ -697,7 +787,10 @@ function Index() {
   }, []);
 
   useEffect(() => {
-    if (hydrated) localStorage.setItem(BOOKS_KEY, JSON.stringify(books.map((book) => ({ ...book, loading: false }))));
+    if (hydrated) {
+      safeSaveToLocalStorage(BOOKS_KEY, JSON.stringify(books.map((book) => ({ ...book, loading: false }))));
+      void saveBooksToIndexedDb(books.map((book) => ({ ...book, loading: false })));
+    }
   }, [books, hydrated]);
 
   useEffect(() => {
