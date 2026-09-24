@@ -82,7 +82,7 @@
 @layer base {
   *, *::before, *::after { border-color: var(--color-border); box-sizing: border-box; }
   html { scroll-behavior: smooth; }
-  body { margin: 0; background: var(--color-background); color: var(--color-foreground); font-family: var(--font-sans); letter-spacing: 0; }
+  body { zoom: 0.8; margin: 0; background: var(--color-background); color: var(--color-foreground); font-family: var(--font-sans); letter-spacing: 0; }
   button, a, input, textarea, select { letter-spacing: 0; }
   button, a { -webkit-tap-highlight-color: transparent; }
   img { max-width: 100%; height: auto; }
