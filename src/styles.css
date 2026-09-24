@@ -410,6 +410,42 @@
   font-weight: 500;
 }
 
+.hcard-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+
+.hcard-complete-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  height: 2.1rem;
+  padding: 0 0.9rem;
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  background: var(--mint);
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--ink);
+  transition: transform 0.12s, background 0.15s, box-shadow 0.15s;
+}
+
+.hcard-complete-btn:hover {
+  background: #a8e0cb;
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.hcard-complete-btn:active {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 var(--ink);
+}
+
 .hcard-update-btn {
   display: inline-flex;
   align-items: center;

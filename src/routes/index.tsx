@@ -1002,20 +1002,34 @@ function Index() {
   const rhythm   = books.length ? Math.round((completed / books.length) * 100) : 0;
 
   // Hero dashboard data
-  const currentBook = useMemo(
-    () => books.find((b) => b.id === currentReadId) ?? books.find((b) => b.status === "Reading") ?? books[0] ?? null,
-    [books, currentReadId]
-  );
+  const currentBook = useMemo(() => {
+    if (currentReadId) {
+      const found = books.find((b) => b.id === currentReadId);
+      if (found && found.status !== "Completed") return found;
+    }
+    const readingBook = books.find((b) => b.status === "Reading");
+    if (readingBook) return readingBook;
+    return null;
+  }, [books, currentReadId]);
+
   const upNextBooks = useMemo(
-    () => upNextIds.map((id) => books.find((b) => b.id === id)).filter((b): b is Book => !!b),
+    () =>
+      upNextIds
+        .map((id) => books.find((b) => b.id === id))
+        .filter((b): b is Book => !!b && b.status !== "Completed"),
     [books, upNextIds]
   );
+
   const displayedUpNext = useMemo(() => {
-    const pinned = upNextIds.map((id) => books.find((b) => b.id === id)).filter((b): b is Book => !!b);
+    const pinned = upNextIds
+      .map((id) => books.find((b) => b.id === id))
+      .filter((b): b is Book => !!b && b.status !== "Completed");
     if (pinned.length >= 3) return pinned.slice(0, 3);
     const pinnedIds = new Set(pinned.map((b) => b.id));
     const currentId = currentBook?.id;
-    const fallbacks = books.filter((b) => b.id !== currentId && !pinnedIds.has(b.id));
+    const fallbacks = books.filter(
+      (b) => b.id !== currentId && b.status !== "Completed" && !pinnedIds.has(b.id)
+    );
     return [...pinned, ...fallbacks].slice(0, 3);
   }, [books, upNextIds, currentBook]);
 
@@ -1038,6 +1052,7 @@ function Index() {
 
   const chooseCurrentRead = (book: Book) => {
     setCurrentReadId(book.id);
+    setUpNextIds((prev) => prev.filter((id) => id !== book.id));
     setBooks((current) => current.map((item) => item.id === book.id ? { ...item, status: "Reading" } : item));
     if (isSupabaseConfigured) void saveBookToDb(bookToRow({ ...book, status: "Reading" }));
     setHeroPickerMode(null);
@@ -1061,24 +1076,96 @@ function Index() {
       .sort((a, b) => sort === "title" ? a.title.localeCompare(b.title) : sort === "author" ? a.author.localeCompare(b.author) : b.addedAt - a.addedAt);
   }, [books, shelf, selectedGenre, query, sort]);
 
+  const handleCompleteBook = (id: string) => {
+    const target = books.find((book) => book.id === id);
+    if (!target) return;
+
+    const isCurrent = id === currentReadId || id === currentBook?.id;
+
+    // Determine the next book to promote as Current Read:
+    // 1. The 1st pinned Up Next book that is not this completed book and not already completed
+    let candidateNext = upNextIds
+      .map((pid) => books.find((b) => b.id === pid))
+      .find((b): b is Book => !!b && b.id !== id && b.status !== "Completed");
+
+    // 2. If no pinned Up Next book, check displayedUpNext queue (which has fallbacks)
+    if (!candidateNext && isCurrent) {
+      candidateNext = displayedUpNext.find((b) => b.id !== id && b.status !== "Completed");
+    }
+
+    // 3. Fallback to any remaining TBR book
+    if (!candidateNext && isCurrent) {
+      candidateNext = books.find((b) => b.id !== id && b.status === "TBR");
+    }
+
+    const updatedTarget: Book = { ...target, status: "Completed" };
+
+    setBooks((current) =>
+      current.map((b) => {
+        if (b.id === id) return updatedTarget;
+        if (isCurrent && candidateNext && b.id === candidateNext.id) {
+          return { ...b, status: "Reading" };
+        }
+        return b;
+      })
+    );
+
+    if (isSupabaseConfigured) {
+      void saveBookToDb(bookToRow(updatedTarget));
+      if (isCurrent && candidateNext) {
+        void saveBookToDb(bookToRow({ ...candidateNext, status: "Reading" }));
+      }
+    }
+
+    if (isCurrent) {
+      const nextReadId = candidateNext ? candidateNext.id : null;
+      // Remove candidateNext from upNextIds (it is now current read) and remove completed book if present
+      const newUpNextIds = upNextIds.filter(
+        (pid) => pid !== id && (!candidateNext || pid !== candidateNext.id)
+      );
+      setCurrentReadId(nextReadId);
+      setUpNextIds(newUpNextIds);
+    } else {
+      // If completed book was in upNextIds, remove it
+      setUpNextIds((prev) => prev.filter((pid) => pid !== id));
+    }
+
+    setCelebrating(id);
+    window.setTimeout(() => setCelebrating(null), 900);
+    toast.success("Another story finished! 🎉", {
+      description: isCurrent && candidateNext
+        ? `"${target.title}" completed. Now reading "${candidateNext.title}"!`
+        : `"${target.title}" moved to Completed.`,
+    });
+  };
+
   const toggleStatus = (id: string) => {
     const target = books.find((book) => book.id === id);
     if (!target) return;
-    const nextStatus: Status =
-      target.status === "TBR" ? "Reading" :
-      target.status === "Reading" ? "Completed" : "TBR";
-    const updated = { ...target, status: nextStatus };
-    setBooks((current) => current.map((book) => book.id === id ? updated : book));
-    if (isSupabaseConfigured) void saveBookToDb(bookToRow(updated));
-    if (nextStatus === "Completed") {
-      setCelebrating(id);
-      window.setTimeout(() => setCelebrating(null), 900);
-      toast.success("Another story finished!", { description: `${target.title} moved to Completed.` });
-    } else if (nextStatus === "Reading") {
-      toast("Now reading! 📚", { description: target.title });
-    } else {
-      toast("Moved back to TBR", { description: target.title });
+
+    if (target.status === "Reading") {
+      handleCompleteBook(id);
+      return;
     }
+
+    if (target.status === "TBR") {
+      const updated = { ...target, status: "Reading" as const };
+      setBooks((current) => current.map((book) => (book.id === id ? updated : book)));
+      if (isSupabaseConfigured) void saveBookToDb(bookToRow(updated));
+      setCurrentReadId(id);
+      setUpNextIds((prev) => prev.filter((pid) => pid !== id));
+      toast("Now reading! 📚", { description: target.title });
+      return;
+    }
+
+    // From Completed -> back to TBR
+    const updated = { ...target, status: "TBR" as const };
+    setBooks((current) => current.map((book) => (book.id === id ? updated : book)));
+    if (isSupabaseConfigured) void saveBookToDb(bookToRow(updated));
+    if (currentReadId === id) {
+      setCurrentReadId(null);
+    }
+    toast("Moved back to TBR", { description: target.title });
   };
 
   const removeBook = (book: Book) => {
@@ -1142,6 +1229,12 @@ function Index() {
       } catch {
         // If upload fails, fall back to saving the data URL (it'll still work locally)
       }
+    }
+
+    const isCurrent = bookToSave.id === currentReadId || bookToSave.id === currentBook?.id;
+    if (isCurrent && bookToSave.status === "Completed") {
+      handleCompleteBook(bookToSave.id);
+      return;
     }
 
     setBooks((current) => current.map((book) => book.id === bookToSave.id ? { ...book, ...bookToSave } : book));
@@ -1293,9 +1386,23 @@ function Index() {
                   {currentBook.description && (
                     <blockquote className="hcard-quote">"{currentBook.description.replace(/<[^>]*>/g, " ").slice(0, 75).trim()}…"</blockquote>
                   )}
-                  <button className="hcard-update-btn" onClick={() => handleEditOpen(currentBook)}>
-                    <BookOpen size={13} /> View details
-                  </button>
+                  <div className="hcard-actions-row">
+                    <button
+                      type="button"
+                      className="hcard-complete-btn"
+                      onClick={() => handleCompleteBook(currentBook.id)}
+                      title="Mark this book as completed"
+                    >
+                      <Check size={13} /> Mark Completed
+                    </button>
+                    <button
+                      type="button"
+                      className="hcard-update-btn"
+                      onClick={() => handleEditOpen(currentBook)}
+                    >
+                      <BookOpen size={13} /> View details
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -1429,7 +1536,7 @@ function Index() {
                     onClick={() => toggleStatus(book.id)}
                     className={book.status === "Completed" ? "status-action is-complete" : book.status === "Reading" ? "status-action is-reading" : "status-action"}
                   >
-                    {book.status === "Completed" ? <><BookOpen size={13} /> Completed</> : book.status === "Reading" ? <><Check size={13} /> Finished</> : <><BookOpen size={13} /> Start reading</>}
+                    {book.status === "Completed" ? <><BookOpen size={13} /> Completed</> : book.status === "Reading" ? <><Check size={13} /> Mark Completed</> : <><BookOpen size={13} /> Start reading</>}
                   </Button>
                   <div className="card-icon-group">
                     <Button
