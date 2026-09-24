@@ -718,8 +718,8 @@
 .sort-box select, .form-select { appearance: none; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: .8rem; font-weight: 600; outline: 0; cursor: pointer; flex: 1; }
 .sort-box::after { content: "⌄"; font-weight: 800; flex-shrink: 0; }
 .book-grid { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem; }
-.book-card { min-width: 0; display: flex; flex-direction: column; border: 2px solid var(--ink); border-radius: .4rem; background: var(--card); box-shadow: 4px 4px 0 color-mix(in oklab, var(--coral) 42%, transparent); position: relative; overflow: hidden; transition: transform .18s ease, box-shadow .18s ease; }
-.book-card:hover { transform: translateY(-4px) rotate(-.2deg); box-shadow: 7px 8px 0 var(--coral); }
+.book-card { min-width: 0; display: flex; flex-direction: column; border: 2px solid var(--ink); border-radius: .4rem; background: var(--card); box-shadow: 4px 4px 0 color-mix(in oklab, var(--coral) 42%, transparent); position: relative; overflow: hidden; transition: transform .18s ease, box-shadow .18s ease; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.book-card:hover { transform: translateY(-4px); box-shadow: 6px 7px 0 var(--coral); }
 .cover-wrap { height: 200px; display: grid; place-items: center; padding: 1rem; background: var(--lavender); border-bottom: 2px solid var(--ink); position: relative; overflow: hidden; }
 .cover-wrap > img { height: 100%; width: auto; max-width: 85%; object-fit: cover; border: 2px solid var(--ink); box-shadow: 4px 4px 0 color-mix(in oklab, var(--ink) 25%, transparent); }
 .book-placeholder { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .55rem; text-align: center; padding: .75rem; }
