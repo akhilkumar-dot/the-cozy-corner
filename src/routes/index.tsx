@@ -60,11 +60,11 @@ type Book = {
   description: string;
   status: Status;
   addedAt: number;
-  loading?: boolean;
-  hasPdf?: boolean;
-  pdfFileName?: string | null;
-  pdfFileSize?: number | null;
-  genre?: string;
+  loading?: boolean | undefined;
+  hasPdf?: boolean | undefined;
+  pdfFileName?: string | null | undefined;
+  pdfFileSize?: number | null | undefined;
+  genre?: string | undefined;
 };
 
 function rowToBook(row: DbBookRow): Book {
@@ -197,7 +197,7 @@ const BOOKS_KEY = "book-nook-books-v1";
 const META_KEY = "book-nook-meta-v1";
 const PDF_SIZE_WARN = 10 * 1024 * 1024; // 10 MB
 
-type BookMeta = { cover: string; description: string; genre?: string };
+type BookMeta = { cover: string; description: string; genre?: string | undefined };
 
 function safeSaveToLocalStorage(key: string, value: string): void {
   try {
@@ -830,7 +830,7 @@ function Index() {
         void handleMigrate();
       }
     }
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let channel: ReturnType<NonNullable<typeof supabase>["channel"]> | null = null;
     if (isSupabaseConfigured && supabase) {
       channel = supabase
         .channel("books-realtime")
@@ -902,6 +902,7 @@ function Index() {
           const index = batch.findIndex((item) => item.id === book.id);
           if (index >= 0) {
             const meta = results[index];
+            if (!meta) return book;
             // Only apply fetched cover/description if the book STILL lacks one at update time.
             // This prevents the enrichment loop from overwriting a cover the user just uploaded.
             const appliedCover = book.cover ? book.cover : (meta.cover || "");
@@ -909,7 +910,7 @@ function Index() {
               ? book.description
               : (meta.description || defaultDescription);
             const appliedGenre = book.genre && book.genre !== "Fiction" ? book.genre : (meta.genre || book.genre || "Fiction");
-            const updated = { ...book, cover: appliedCover, description: appliedDescription, genre: appliedGenre, loading: false };
+            const updated: Book = { ...book, cover: appliedCover, description: appliedDescription, genre: appliedGenre, loading: false };
             // Only save to Supabase if we actually enriched something new
             if ((!book.cover && updated.cover) || (book.description === defaultDescription && updated.description !== defaultDescription)) {
               if (isSupabaseConfigured) void saveBookToDb(bookToRow(updated));
@@ -1038,7 +1039,7 @@ function Index() {
             const appliedDescription = item.description && item.description !== defaultDescription
               ? item.description
               : (meta.description || defaultDescription);
-            const updated = { ...item, cover: appliedCover, description: appliedDescription, genre: meta.genre || item.genre, loading: false };
+            const updated: Book = { ...item, cover: appliedCover, description: appliedDescription, genre: meta.genre || item.genre || "Fiction", loading: false };
             if (isSupabaseConfigured) void saveBookToDb(bookToRow(updated));
             return updated;
           }
@@ -1089,7 +1090,7 @@ function Index() {
             const appliedDescription = item.description && item.description !== defaultDescription
               ? item.description
               : (meta.description || defaultDescription);
-            const withMeta = { ...item, cover: appliedCover, description: appliedDescription, genre: meta.genre || item.genre, loading: false };
+            const withMeta: Book = { ...item, cover: appliedCover, description: appliedDescription, genre: meta.genre || item.genre || "Fiction", loading: false };
             if (isSupabaseConfigured) void saveBookToDb(bookToRow(withMeta));
             return withMeta;
           }

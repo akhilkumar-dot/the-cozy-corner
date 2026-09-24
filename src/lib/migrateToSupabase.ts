@@ -74,7 +74,9 @@ async function runBatched<T>(
   async function next(): Promise<void> {
     const i = cursor++;
     if (i >= items.length) return;
-    await worker(items[i], i);
+    const item = items[i];
+    if (item === undefined) return;
+    await worker(item, i);
     return next();
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => next()));
@@ -94,6 +96,7 @@ export async function migrateEverythingToSupabase(
   if (!isSupabaseConfigured || !supabase) {
     throw new Error("Supabase is not configured. Please check your environment variables.");
   }
+  const client = supabase;
 
   // 1. Read metadata from both localStorage and IndexedDB
   let books: Book[] = [];
@@ -156,7 +159,7 @@ export async function migrateEverythingToSupabase(
         const pdfBlob = await getPdf(book.id);
         if (pdfBlob) {
           const path = `${book.id}.pdf`;
-          const { error: pdfErr } = await supabase.storage
+          const { error: pdfErr } = await client.storage
             .from("book-pdfs")
             .upload(path, pdfBlob, { upsert: true, contentType: "application/pdf" });
           if (!pdfErr) {
@@ -191,7 +194,7 @@ export async function migrateEverythingToSupabase(
         pdf_storage_path: pdfStoragePath,
       };
 
-      const { error: rowErr } = await supabase
+      const { error: rowErr } = await client
         .from("books")
         .upsert(row, { onConflict: "id" });
 
