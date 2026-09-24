@@ -702,24 +702,31 @@ function Index() {
     catch { return []; }
   });
 
+  const prefsLoadedRef = useRef(false);
+  const isRemotePrefsUpdateRef = useRef(false);
+
   // Persist up-next + current read to localStorage AND Supabase
   useEffect(() => {
-    localStorage.setItem("book-nook-up-next-v1", JSON.stringify(upNextIds));
-    if (isSupabaseConfigured) {
-      void saveUserPrefs({ current_read_id: currentReadId, up_next_ids: upNextIds });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [upNextIds]);
+    // Never overwrite cloud prefs with initial/stale local state before cloud sync finishes
+    if (!prefsLoadedRef.current) return;
 
-  useEffect(() => {
+    // Skip echo when this state change was received from another device via realtime
+    if (isRemotePrefsUpdateRef.current) {
+      isRemotePrefsUpdateRef.current = false;
+      return;
+    }
+
+    localStorage.setItem("book-nook-up-next-v1", JSON.stringify(upNextIds));
     if (currentReadId !== null) {
       localStorage.setItem("book-nook-current-read-v1", currentReadId);
+    } else {
+      localStorage.removeItem("book-nook-current-read-v1");
     }
+
     if (isSupabaseConfigured) {
       void saveUserPrefs({ current_read_id: currentReadId, up_next_ids: upNextIds });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentReadId]);
+  }, [upNextIds, currentReadId]);
 
   const handleMigrate = async () => {
     if (migrating || !isSupabaseConfigured) return;
@@ -838,7 +845,11 @@ function Index() {
         } catch (err) {
           console.error("Supabase sync error:", err);
           // Gracefully keep showing local books on error
+        } finally {
+          prefsLoadedRef.current = true;
         }
+      } else {
+        prefsLoadedRef.current = true;
       }
     }
 
@@ -906,11 +917,14 @@ function Index() {
           (payload) => {
             if (payload.eventType === "UPDATE" || payload.eventType === "INSERT") {
               const row = payload.new as { current_read_id?: string | null; up_next_ids?: string[] };
+              isRemotePrefsUpdateRef.current = true;
               // Sync current read to this tab
               if (row.current_read_id !== undefined) {
                 setCurrentReadId(row.current_read_id ?? null);
                 if (row.current_read_id) {
                   localStorage.setItem("book-nook-current-read-v1", row.current_read_id);
+                } else {
+                  localStorage.removeItem("book-nook-current-read-v1");
                 }
               }
               // Sync up-next list to this tab (cap at 3 defensively)
