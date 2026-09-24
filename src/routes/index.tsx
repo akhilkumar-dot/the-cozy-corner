@@ -1076,7 +1076,7 @@ function Index() {
     <main className="min-h-screen overflow-hidden bg-cream text-ink">
       <header className="site-header">
         <a href="#top" className="logo-mark" aria-label="The Book Nook home"><span>THE</span> BOOK NOOK <BookOpen /></a>
-        <nav className="hidden items-center gap-8 md:flex">
+        <nav>
           <a href="#shelves">My shelf</a>
           <a href="#quote">Bookish wisdom</a>
           {isSupabaseConfigured && (
@@ -1093,7 +1093,7 @@ function Index() {
           )}
         </nav>
 
-        <Button onClick={() => setModalOpen(true)} className="rounded-full border-2 border-ink bg-coral px-5 font-display text-ink shadow-button hover:bg-coral/90">+ Add a Book</Button>
+        <Button onClick={() => setModalOpen(true)} className="rounded-full border-2 border-ink bg-coral px-3 md:px-5 font-display text-ink shadow-button hover:bg-coral/90 text-sm md:text-base whitespace-nowrap">+ Add a Book</Button>
       </header>
 
       <section id="top" className="hero-section">
