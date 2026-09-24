@@ -426,6 +426,7 @@
   box-shadow: 2px 2px 0 rgba(0,0,0,0.3);
   transition: transform 0.12s, background 0.15s;
   align-self: flex-start;
+  margin-top: auto;
 }
 
 .hcard-update-btn:hover {

@@ -1217,17 +1217,8 @@ function Index() {
                   {currentBook.description && (
                     <blockquote className="hcard-quote">"{currentBook.description.replace(/<[^>]*>/g, " ").slice(0, 75).trim()}…"</blockquote>
                   )}
-                  <div className="hcard-progress-header">
-                    <span className="hcard-progress-label-top">PROGRESS</span>
-                  </div>
-                  <div className="hcard-progress-bar">
-                    <div className="hcard-progress-fill" style={{ width: `${rhythm || 64}%` }} />
-                  </div>
-                  <p className="hcard-progress-label">
-                    Page {completed > 0 ? completed * 115 + 120 : 358} of {books.length ? books.length * 140 : 559} · about 2 hours left
-                  </p>
                   <button className="hcard-update-btn" onClick={() => handleEditOpen(currentBook)}>
-                    <BookOpen size={13} /> Update progress
+                    <BookOpen size={13} /> View details
                   </button>
                 </div>
               </div>
@@ -1251,12 +1242,12 @@ function Index() {
               <strong>{tbr || 12}</strong>
             </div>
             <div className="hstat hstat--coral">
-              <span>TOTAL BOOKS</span>
-              <strong>{books.length || 36}</strong>
+              <span>READING NOW</span>
+              <strong>{reading > 0 ? reading : (currentBook ? 1 : 0)}</strong>
             </div>
             <div className="hstat hstat--white">
-              <span>PAGES READ</span>
-              <strong>{completed > 0 ? `${(completed * 342 / 1000).toFixed(1)}k` : "8.2k"}</strong>
+              <span>TOTAL BOOKS</span>
+              <strong>{books.length || 36}</strong>
             </div>
           </div>
 
