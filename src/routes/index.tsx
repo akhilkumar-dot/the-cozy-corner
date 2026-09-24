@@ -786,7 +786,15 @@ function Index() {
 
     void initBooks();
 
-    // 3. Setup real-time listener for live sync across browser profiles
+    // Expose migration globally in browser console
+    if (typeof window !== "undefined") {
+      (window as unknown as { migrateToSupabase: () => void }).migrateToSupabase = () => void handleMigrate();
+      // Auto-trigger full migration on first load if unmigrated local data exists
+      const alreadyMigrated = localStorage.getItem("book-nook-migrated-to-supabase-v1") === "true";
+      if (isSupabaseConfigured && !alreadyMigrated) {
+        void handleMigrate();
+      }
+    }
     let channel: ReturnType<typeof supabase.channel> | null = null;
     if (isSupabaseConfigured && supabase) {
       channel = supabase

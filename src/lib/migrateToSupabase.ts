@@ -11,7 +11,7 @@
  * - Safe to re-run: idempotent upserts
  */
 
-import { getPdf } from "./pdfStore";
+import { getPdf, loadBooksFromIndexedDb, saveBooksToIndexedDb } from "./pdfStore";
 import {
   isSupabaseConfigured,
   supabase,
@@ -95,16 +95,27 @@ export async function migrateEverythingToSupabase(
     throw new Error("Supabase is not configured. Please check your environment variables.");
   }
 
-  // 1. Read metadata from localStorage
-  const raw = localStorage.getItem(BOOKS_KEY);
-  if (!raw) return result;
-
+  // 1. Read metadata from both localStorage and IndexedDB
   let books: Book[] = [];
-  try {
-    books = JSON.parse(raw) as Book[];
-  } catch {
-    return result;
+  const raw = localStorage.getItem(BOOKS_KEY);
+  if (raw) {
+    try {
+      books = JSON.parse(raw) as Book[];
+    } catch {
+      // ignore
+    }
   }
+
+  try {
+    const idbBooks = await loadBooksFromIndexedDb<Book>();
+    if (idbBooks && idbBooks.length > books.length) {
+      books = idbBooks;
+    }
+  } catch {
+    // ignore
+  }
+
+  if (books.length === 0) return result;
 
   result.totalBooks = books.length;
   onProgress?.({ phase: "reading", current: 0, total: books.length });
@@ -205,13 +216,14 @@ export async function migrateEverythingToSupabase(
     }
   });
 
-  // 3. Save lightweight books back to localStorage & mark migration complete
+  // 3. Save lightweight books back to localStorage & IndexedDB & mark migration complete
   try {
     localStorage.setItem(
       BOOKS_KEY,
       JSON.stringify(updatedBooks.map((b) => ({ ...b, loading: false })))
     );
     localStorage.setItem(MIGRATION_FLAG, "true");
+    void saveBooksToIndexedDb(updatedBooks.map((b) => ({ ...b, loading: false })));
   } catch (err) {
     console.warn("Could not rewrite localStorage with cleaned URLs:", err);
   }
