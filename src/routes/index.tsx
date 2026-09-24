@@ -39,6 +39,7 @@ import {
   saveBookToDb,
   seedBooksInDb,
   supabase,
+  uploadCoverToStorage,
   uploadPdfToStorage,
   type DbBookRow,
 } from "@/lib/supabase";
@@ -822,7 +823,20 @@ function Index() {
             } else if (payload.eventType === "UPDATE") {
               const updatedBook = rowToBook(payload.new as DbBookRow);
               setBooks((current) =>
-                current.map((b) => (b.id === updatedBook.id ? { ...b, ...updatedBook } : b))
+                current.map((b) => {
+                  if (b.id !== updatedBook.id) return b;
+                  // Realtime: preserve the in-memory cover/description if the incoming
+                  // cloud row has an empty value (race condition guard — user's upload
+                  // may not have propagated to Supabase yet when the enrichment write arrives)
+                  return {
+                    ...b,
+                    ...updatedBook,
+                    cover: updatedBook.cover || b.cover,
+                    description: updatedBook.description && updatedBook.description !== defaultDescription
+                      ? updatedBook.description
+                      : b.description || updatedBook.description,
+                  };
+                })
               );
             } else if (payload.eventType === "DELETE") {
               const deletedId = (payload.old as { id?: string })?.id;
@@ -863,8 +877,19 @@ function Index() {
         setBooks((current) => current.map((book) => {
           const index = batch.findIndex((item) => item.id === book.id);
           if (index >= 0) {
-            const updated = { ...book, ...results[index], loading: false };
-            if (isSupabaseConfigured) void saveBookToDb(bookToRow(updated));
+            const meta = results[index];
+            // Only apply fetched cover/description if the book STILL lacks one at update time.
+            // This prevents the enrichment loop from overwriting a cover the user just uploaded.
+            const appliedCover = book.cover ? book.cover : (meta.cover || "");
+            const appliedDescription = book.description && book.description !== defaultDescription
+              ? book.description
+              : (meta.description || defaultDescription);
+            const appliedGenre = book.genre && book.genre !== "Fiction" ? book.genre : (meta.genre || book.genre || "Fiction");
+            const updated = { ...book, cover: appliedCover, description: appliedDescription, genre: appliedGenre, loading: false };
+            // Only save to Supabase if we actually enriched something new
+            if ((!book.cover && updated.cover) || (book.description === defaultDescription && updated.description !== defaultDescription)) {
+              if (isSupabaseConfigured) void saveBookToDb(bookToRow(updated));
+            }
             return updated;
           }
           return book;
@@ -946,7 +971,12 @@ function Index() {
       void fetchBookMeta(book.title, book.author).then((meta) => {
         setBooks((current) => current.map((item) => {
           if (item.id === book.id) {
-            const updated = { ...item, ...meta, loading: false };
+            // Guard: only apply fetched cover if the book still has no cover at update time
+            const appliedCover = item.cover ? item.cover : (meta.cover || "");
+            const appliedDescription = item.description && item.description !== defaultDescription
+              ? item.description
+              : (meta.description || defaultDescription);
+            const updated = { ...item, cover: appliedCover, description: appliedDescription, genre: meta.genre || item.genre, loading: false };
             if (isSupabaseConfigured) void saveBookToDb(bookToRow(updated));
             return updated;
           }
@@ -957,24 +987,47 @@ function Index() {
   };
 
   const saveBook = async (updated: Book, pdfFile?: File | null, pdfRemoved?: boolean) => {
-    setBooks((current) => current.map((book) => book.id === updated.id ? { ...book, ...updated } : book));
-    toast.success("Updated!", { description: `${updated.title} has been saved.` });
+    // If the user uploaded a cover (stored as a data: URL), upload it to Supabase Storage
+    // and replace the data URL with the public storage URL so it persists across devices.
+    let bookToSave = updated;
+    if (updated.cover?.startsWith("data:") && isSupabaseConfigured) {
+      try {
+        const res = await fetch(updated.cover);
+        const blob = await res.blob();
+        const storageUrl = await uploadCoverToStorage(updated.id, blob);
+        if (storageUrl) {
+          bookToSave = { ...updated, cover: storageUrl };
+          // Update state immediately with the storage URL so it shows correctly
+          setBooks((current) => current.map((book) => book.id === updated.id ? { ...book, cover: storageUrl } : book));
+        }
+      } catch {
+        // If upload fails, fall back to saving the data URL (it'll still work locally)
+      }
+    }
+
+    setBooks((current) => current.map((book) => book.id === bookToSave.id ? { ...book, ...bookToSave } : book));
+    toast.success("Updated!", { description: `${bookToSave.title} has been saved.` });
 
     if (pdfFile && isSupabaseConfigured) {
-      void uploadPdfToStorage(updated.id, pdfFile);
+      void uploadPdfToStorage(bookToSave.id, pdfFile);
     } else if (pdfRemoved && isSupabaseConfigured) {
-      void deletePdfFromStorage(updated.id);
+      void deletePdfFromStorage(bookToSave.id);
     }
 
     if (isSupabaseConfigured) {
-      void saveBookToDb(bookToRow(updated));
+      void saveBookToDb(bookToRow(bookToSave));
     }
 
     if (!updated.cover) {
       void fetchBookMeta(updated.title, updated.author).then((meta) => {
         setBooks((current) => current.map((item) => {
           if (item.id === updated.id) {
-            const withMeta = { ...item, ...meta, loading: false };
+            // Guard: only apply fetched cover if the book still has no cover at update time
+            const appliedCover = item.cover ? item.cover : (meta.cover || "");
+            const appliedDescription = item.description && item.description !== defaultDescription
+              ? item.description
+              : (meta.description || defaultDescription);
+            const withMeta = { ...item, cover: appliedCover, description: appliedDescription, genre: meta.genre || item.genre, loading: false };
             if (isSupabaseConfigured) void saveBookToDb(bookToRow(withMeta));
             return withMeta;
           }
