@@ -728,6 +728,16 @@ function Index() {
     }
   }, [upNextIds, currentReadId]);
 
+  // Guarantee that already completed books are never in upNextIds
+  useEffect(() => {
+    if (!hydrated) return;
+    const completedIds = new Set(books.filter((b) => b.status === "Completed").map((b) => b.id));
+    const hasCompletedInUpNext = upNextIds.some((id) => completedIds.has(id));
+    if (hasCompletedInUpNext) {
+      setUpNextIds((prev) => prev.filter((id) => !completedIds.has(id)));
+    }
+  }, [books, hydrated, upNextIds]);
+
   const handleMigrate = async () => {
     if (migrating || !isSupabaseConfigured) return;
     setMigrating(true);
@@ -832,14 +842,32 @@ function Index() {
 
           // Apply cloud user prefs (current read + up next) — cloud is source of truth
           if (dbPrefs) {
+            const allResolvedBooks = (dbRows && dbRows.length > 0) ? dbRows.map(rowToBook) : localBooks;
             if (dbPrefs.current_read_id) {
-              setCurrentReadId(dbPrefs.current_read_id);
-              localStorage.setItem("book-nook-current-read-v1", dbPrefs.current_read_id);
+              const currentReadBook = allResolvedBooks.find((b) => b.id === dbPrefs.current_read_id);
+              if (currentReadBook && currentReadBook.status !== "Completed") {
+                setCurrentReadId(dbPrefs.current_read_id);
+                localStorage.setItem("book-nook-current-read-v1", dbPrefs.current_read_id);
+              } else {
+                // If saved current read is already completed, promote the 1st valid non-completed book
+                const firstValid = (dbPrefs.up_next_ids ?? [])
+                  .map((id) => allResolvedBooks.find((b) => b.id === id))
+                  .find((b) => b && b.status !== "Completed");
+                const nextId = firstValid ? firstValid.id : (allResolvedBooks.find((b) => b.status === "Reading")?.id ?? null);
+                setCurrentReadId(nextId);
+                if (nextId) localStorage.setItem("book-nook-current-read-v1", nextId);
+                else localStorage.removeItem("book-nook-current-read-v1");
+              }
             }
             if (dbPrefs.up_next_ids && dbPrefs.up_next_ids.length > 0) {
-              const capped = dbPrefs.up_next_ids.slice(0, 3);
-              setUpNextIds(capped);
-              localStorage.setItem("book-nook-up-next-v1", JSON.stringify(capped));
+              const cleanUpNext = dbPrefs.up_next_ids
+                .filter((id) => {
+                  const b = allResolvedBooks.find((bk) => bk.id === id);
+                  return b && b.status !== "Completed";
+                })
+                .slice(0, 3);
+              setUpNextIds(cleanUpNext);
+              localStorage.setItem("book-nook-up-next-v1", JSON.stringify(cleanUpNext));
             }
           }
         } catch (err) {
@@ -1036,17 +1064,31 @@ function Index() {
   const MAX_UP_NEXT = 3;
 
   const toggleUpNext = (bookId: string) => {
+    const target = books.find((b) => b.id === bookId);
+    if (!target) return;
+
+    if (target.status === "Completed") {
+      toast.error("Already completed!", {
+        description: `"${target.title}" is finished and cannot be added to Up Next.`,
+      });
+      return;
+    }
+
     setUpNextIds((prev) => {
       if (prev.includes(bookId)) {
-        toast("Removed from Up Next", { description: books.find((b) => b.id === bookId)?.title });
+        toast("Removed from Up Next", { description: target.title });
         return prev.filter((id) => id !== bookId);
       }
-      if (prev.length >= MAX_UP_NEXT) {
+      const validPrev = prev.filter((id) => {
+        const b = books.find((bk) => bk.id === id);
+        return b && b.status !== "Completed";
+      });
+      if (validPrev.length >= MAX_UP_NEXT) {
         toast.error(`Up Next is full (max ${MAX_UP_NEXT})`, { description: "Remove a book from Up Next first." });
         return prev;
       }
-      toast("Added to Up Next 📖", { description: books.find((b) => b.id === bookId)?.title });
-      return [...prev, bookId];
+      toast("Added to Up Next 📖", { description: target.title });
+      return [...validPrev, bookId];
     });
   };
 
@@ -1542,9 +1584,22 @@ function Index() {
                     <Button
                       variant="ghost" size="icon"
                       onClick={() => toggleUpNext(book.id)}
-                      aria-label={upNextIds.includes(book.id) ? "Remove from Up Next" : "Add to Up Next"}
-                      title={upNextIds.includes(book.id) ? "Remove from Up Next" : "Add to Up Next"}
-                      className={`card-icon-btn card-bookmark-btn ${upNextIds.includes(book.id) ? "is-pinned" : ""}`}
+                      disabled={book.status === "Completed"}
+                      aria-label={
+                        book.status === "Completed"
+                          ? "Completed book cannot be added to Up Next"
+                          : upNextIds.includes(book.id)
+                          ? "Remove from Up Next"
+                          : "Add to Up Next"
+                      }
+                      title={
+                        book.status === "Completed"
+                          ? "Completed book cannot be added to Up Next"
+                          : upNextIds.includes(book.id)
+                          ? "Remove from Up Next"
+                          : "Add to Up Next"
+                      }
+                      className={`card-icon-btn card-bookmark-btn ${upNextIds.includes(book.id) && book.status !== "Completed" ? "is-pinned" : ""} ${book.status === "Completed" ? "opacity-25 cursor-not-allowed pointer-events-none" : ""}`}
                     >
                       <Bookmark size={14} />
                     </Button>
@@ -1592,24 +1647,32 @@ function Index() {
             </DialogDescription>
           </DialogHeader>
           <div className="hero-picker-list">
-            {books.map((book) => {
-              const selected = heroPickerMode === "current" ? currentBook?.id === book.id : upNextIds.includes(book.id);
-              return (
-                <Button
-                  key={book.id}
-                  type="button"
-                  variant="ghost"
-                  className={`hero-picker-option ${selected ? "is-selected" : ""}`}
-                  onClick={() => heroPickerMode === "current" ? chooseCurrentRead(book) : toggleUpNext(book.id)}
-                >
-                  <span className="hero-picker-cover">
-                    {book.cover ? <img src={book.cover} alt="" /> : <BookOpen aria-hidden="true" />}
-                  </span>
-                  <span className="hero-picker-copy"><strong>{book.title}</strong><small>{book.author}</small></span>
-                  <span className="hero-picker-check" aria-hidden="true">{selected ? <Check /> : <ChevronRight />}</span>
-                </Button>
-              );
-            })}
+            {books.filter((b) => b.status !== "Completed").length === 0 ? (
+              <p className="p-6 text-center text-sm text-ink/65">
+                All books in your library are completed! Add more books to arrange your reading queue.
+              </p>
+            ) : (
+              books
+                .filter((book) => book.status !== "Completed")
+                .map((book) => {
+                  const selected = heroPickerMode === "current" ? currentBook?.id === book.id : upNextIds.includes(book.id);
+                  return (
+                    <Button
+                      key={book.id}
+                      type="button"
+                      variant="ghost"
+                      className={`hero-picker-option ${selected ? "is-selected" : ""}`}
+                      onClick={() => heroPickerMode === "current" ? chooseCurrentRead(book) : toggleUpNext(book.id)}
+                    >
+                      <span className="hero-picker-cover">
+                        {book.cover ? <img src={book.cover} alt="" /> : <BookOpen aria-hidden="true" />}
+                      </span>
+                      <span className="hero-picker-copy"><strong>{book.title}</strong><small>{book.author}</small></span>
+                      <span className="hero-picker-check" aria-hidden="true">{selected ? <Check /> : <ChevronRight />}</span>
+                    </Button>
+                  );
+                })
+            )}
           </div>
           {heroPickerMode === "up-next" && <p className="hero-picker-count">{upNextIds.length} of 3 selected</p>}
         </DialogContent>
