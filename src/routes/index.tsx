@@ -1219,7 +1219,6 @@ function Index() {
                   )}
                   <div className="hcard-progress-header">
                     <span className="hcard-progress-label-top">PROGRESS</span>
-                    <span className="hcard-progress-pct">{rhythm || 64}%</span>
                   </div>
                   <div className="hcard-progress-bar">
                     <div className="hcard-progress-fill" style={{ width: `${rhythm || 64}%` }} />
@@ -1252,12 +1251,12 @@ function Index() {
               <strong>{tbr || 12}</strong>
             </div>
             <div className="hstat hstat--coral">
-              <span>DAY STREAK</span>
-              <strong>8</strong>
+              <span>TOTAL BOOKS</span>
+              <strong>{books.length || 36}</strong>
             </div>
             <div className="hstat hstat--white">
-              <span>READING NOW</span>
-              <strong>{reading}</strong>
+              <span>PAGES READ</span>
+              <strong>{completed > 0 ? `${(completed * 342 / 1000).toFixed(1)}k` : "8.2k"}</strong>
             </div>
           </div>
 
