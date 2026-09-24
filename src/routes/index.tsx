@@ -1347,32 +1347,34 @@ function Index() {
                 <h3>{book.title}</h3>
                 <p className="description">{book.description.replace(/<[^>]*>/g, " ")}</p>
               </div>
-              <div className="card-actions">
-                <Button
-                  onClick={() => toggleStatus(book.id)}
-                  className={book.status === "Completed" ? "status-action is-complete" : book.status === "Reading" ? "status-action is-reading" : "status-action"}
-                >
-                  {book.status === "Completed" ? <><BookOpen size={13} /> TBR</> : book.status === "Reading" ? <><Check size={13} /> Finished</> : <><BookOpen size={13} /> Start reading</>}
-                </Button>
-                <Button
-                  variant="ghost" size="icon"
-                  onClick={() => toggleUpNext(book.id)}
-                  aria-label={upNextIds.includes(book.id) ? "Remove from Up Next" : "Add to Up Next"}
-                  title={upNextIds.includes(book.id) ? "Remove from Up Next" : "Add to Up Next"}
-                  className={`card-icon-btn card-bookmark-btn ${upNextIds.includes(book.id) ? "is-pinned" : ""}`}
-                >
-                  <Bookmark size={14} />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={() => handleEditOpen(book)} aria-label={`Edit ${book.title}`} title="Edit book" className="card-icon-btn"><Pencil size={14} /></Button>
-                <Button variant="ghost" size="icon" onClick={() => removeBook(book)} aria-label={`Remove ${book.title}`} title="Remove book" className="card-icon-btn card-icon-btn--danger"><Trash2 size={14} /></Button>
-              </div>
-              {book.hasPdf && (
-                <div className="card-pdf-row">
-                  <button type="button" className="pdf-pill" onClick={() => openPdf(book.id)}>
-                    📄 Read PDF
-                  </button>
+              <div className="card-footer-actions">
+                <div className="card-actions-row">
+                  <Button
+                    onClick={() => toggleStatus(book.id)}
+                    className={book.status === "Completed" ? "status-action is-complete" : book.status === "Reading" ? "status-action is-reading" : "status-action"}
+                  >
+                    {book.status === "Completed" ? <><BookOpen size={13} /> Completed</> : book.status === "Reading" ? <><Check size={13} /> Finished</> : <><BookOpen size={13} /> Start reading</>}
+                  </Button>
+                  <div className="card-icon-group">
+                    <Button
+                      variant="ghost" size="icon"
+                      onClick={() => toggleUpNext(book.id)}
+                      aria-label={upNextIds.includes(book.id) ? "Remove from Up Next" : "Add to Up Next"}
+                      title={upNextIds.includes(book.id) ? "Remove from Up Next" : "Add to Up Next"}
+                      className={`card-icon-btn card-bookmark-btn ${upNextIds.includes(book.id) ? "is-pinned" : ""}`}
+                    >
+                      <Bookmark size={14} />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleEditOpen(book)} aria-label={`Edit ${book.title}`} title="Edit book" className="card-icon-btn"><Pencil size={14} /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => removeBook(book)} aria-label={`Remove ${book.title}`} title="Remove book" className="card-icon-btn card-icon-btn--danger"><Trash2 size={14} /></Button>
+                  </div>
                 </div>
-              )}
+                {book.hasPdf && (
+                  <button type="button" className="pdf-pill" onClick={() => openPdf(book.id)}>
+                    <FileText size={13} /> Read PDF
+                  </button>
+                )}
+              </div>
               {celebrating === book.id && <div className="confetti" aria-hidden="true">✦ <span>♥</span> ★ <b>✦</b> ●</div>}
             </article>
           ))}

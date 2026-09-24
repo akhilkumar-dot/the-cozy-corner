@@ -718,8 +718,9 @@
 .search-box button { width: 2rem; height: 2rem; flex-shrink: 0; }
 .sort-box select, .form-select { appearance: none; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: .8rem; font-weight: 600; outline: 0; cursor: pointer; flex: 1; }
 .sort-box::after { content: "⌄"; font-weight: 800; flex-shrink: 0; }
+@media (max-width: 380px) { .book-grid { grid-template-columns: 1fr; } }
 .book-grid { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem; }
-.book-card { min-width: 0; display: flex; flex-direction: column; border: 2px solid var(--ink); border-radius: .4rem; background: var(--card); box-shadow: 4px 4px 0 color-mix(in oklab, var(--coral) 42%, transparent); position: relative; overflow: hidden; transition: transform .18s ease, box-shadow .18s ease; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.book-card { min-width: 0; display: flex; flex-direction: column; border: 2px solid var(--ink); border-radius: .4rem; background: var(--card); box-shadow: 4px 4px 0 color-mix(in oklab, var(--coral) 42%, transparent); position: relative; overflow: hidden; transition: transform .18s ease, box-shadow .18s ease; backface-visibility: hidden; -webkit-backface-visibility: hidden; container-type: inline-size; container-name: bookcard; }
 .book-card:hover { transform: translateY(-4px); box-shadow: 6px 7px 0 var(--coral); }
 .cover-wrap { height: 200px; display: grid; place-items: center; padding: 1rem; background: var(--lavender); border-bottom: 2px solid var(--ink); position: relative; overflow: hidden; }
 .cover-wrap > img { height: 100%; width: auto; max-width: 85%; object-fit: cover; border: 2px solid var(--ink); box-shadow: 4px 4px 0 color-mix(in oklab, var(--ink) 25%, transparent); }
@@ -732,11 +733,223 @@
 .book-info h3 { margin: 0; font-family: var(--font-display); font-size: 1.05rem; line-height: 1.1; overflow-wrap: anywhere; }
 .book-info .author { margin: .28rem 0 .55rem; color: var(--coral); font-size: .7rem; font-weight: 700; }
 .book-info .description { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin: 0; color: var(--muted-foreground); font-size: .7rem; line-height: 1.6; }
-.card-actions { display: flex; gap: .4rem; padding: 0 .75rem .8rem; }
-.status-action { flex: 1; height: 2.4rem; border: 2px solid var(--ink); border-radius: 999px; background: var(--coral); color: var(--ink); font-size: .65rem; font-weight: 700; white-space: nowrap; overflow: hidden; }
-.status-action:hover { background: var(--yellow); }
-.status-action.is-complete { background: var(--mint); }
-.card-actions > button:last-child { flex: none; border-radius: 50%; color: var(--destructive); }
+/* ─── Card footer actions (responsive for all devices) ────────────── */
+.card-footer-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.42rem;
+  padding: 0 0.8rem 0.85rem;
+  margin-top: auto;
+}
+
+.card-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  width: 100%;
+}
+
+.status-action {
+  flex: 1 1 0%;
+  min-width: 0;
+  height: 2.35rem;
+  padding: 0 0.75rem;
+  border: 2px solid var(--ink) !important;
+  border-radius: 999px !important;
+  background: var(--coral) !important;
+  color: var(--ink) !important;
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+  box-shadow: 2px 2px 0 var(--ink);
+  cursor: pointer;
+  transition: background .15s ease, transform .12s ease, box-shadow .12s ease;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.status-action svg {
+  flex-shrink: 0;
+  width: 13px;
+  height: 13px;
+}
+
+.status-action:hover {
+  background: var(--yellow) !important;
+  transform: translateY(-1px);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.status-action:active {
+  transform: translateY(1px);
+  box-shadow: 1px 1px 0 var(--ink);
+}
+
+.status-action.is-reading {
+  background: var(--sky) !important;
+}
+
+.status-action.is-complete {
+  background: var(--mint) !important;
+}
+
+.card-icon-group {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex-shrink: 0;
+}
+
+.card-icon-btn {
+  flex: none;
+  width: 2.1rem !important;
+  height: 2.1rem !important;
+  min-width: 2.1rem;
+  min-height: 2.1rem;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  color: var(--ink);
+  opacity: 0.75;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: opacity .15s ease, color .15s ease, background .15s ease, transform .12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.card-icon-btn:hover {
+  opacity: 1;
+  color: var(--ink);
+  background: var(--yellow) !important;
+  transform: translateY(-1px);
+}
+
+.card-icon-btn:active {
+  transform: translateY(1px);
+}
+
+.card-icon-btn--danger {
+  color: var(--destructive);
+  opacity: 0.85;
+}
+
+.card-icon-btn--danger:hover {
+  opacity: 1;
+  color: var(--destructive);
+  background: oklch(0.96 0.05 25) !important;
+}
+
+.card-bookmark-btn {
+  color: var(--muted-foreground) !important;
+}
+
+.card-bookmark-btn.is-pinned {
+  color: var(--coral) !important;
+  opacity: 1;
+}
+
+.card-bookmark-btn.is-pinned svg {
+  fill: var(--coral);
+}
+
+.pdf-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  height: 2.1rem;
+  padding: 0 0.85rem;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--sky);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background .15s ease, transform .12s ease, box-shadow .12s ease;
+  box-shadow: 2px 2px 0 var(--ink);
+  white-space: nowrap;
+  width: fit-content;
+  max-width: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pdf-pill:hover {
+  background: var(--mint);
+  transform: translateY(-1px);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.pdf-pill:active {
+  transform: translateY(1px);
+  box-shadow: 1px 1px 0 var(--ink);
+}
+
+.pdf-pill svg {
+  flex-shrink: 0;
+  width: 13px;
+  height: 13px;
+}
+
+/* ── Container queries for responsive card buttons on any device ── */
+@container bookcard (max-width: 275px) {
+  .card-footer-actions {
+    padding: 0 0.65rem 0.75rem;
+    gap: 0.38rem;
+  }
+  .status-action {
+    font-size: 0.68rem;
+    padding: 0 0.55rem;
+    height: 2.2rem;
+    gap: 0.25rem;
+  }
+  .card-icon-btn {
+    width: 1.95rem !important;
+    height: 1.95rem !important;
+    min-width: 1.95rem;
+    min-height: 1.95rem;
+  }
+  .card-icon-group {
+    gap: 0.1rem;
+  }
+  .pdf-pill {
+    height: 2rem;
+    font-size: 0.68rem;
+    padding: 0 0.65rem;
+  }
+}
+
+@container bookcard (max-width: 235px) {
+  .card-actions-row {
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+  .status-action {
+    width: 100%;
+    flex: 1 1 100%;
+    height: 2.25rem;
+  }
+  .card-icon-group {
+    width: 100%;
+    justify-content: flex-end;
+    gap: 0.35rem;
+    padding-top: 0.1rem;
+  }
+  .pdf-pill {
+    width: 100%;
+    justify-content: center;
+  }
+}
 .confetti { position: absolute; inset: 30% 0 auto; z-index: 10; text-align: center; color: var(--coral); font-size: 1.7rem; word-spacing: 1.3rem; animation: burst .9s ease-out forwards; pointer-events: none; }
 .confetti span { color: var(--green); }.confetti b { color: var(--yellow); }
 .empty-shelf { max-width: 680px; margin: 3rem auto; text-align: center; padding: 0 1rem; }
@@ -745,10 +958,6 @@
 
 /* ─── Book card extras ──────────────────────────────────────────── */
 .status-badge.is-reading { background: var(--sky); }
-.status-action.is-reading { background: var(--sky); }
-.card-bookmark-btn { color: var(--muted-foreground) !important; }
-.card-bookmark-btn.is-pinned { color: var(--coral) !important; }
-.card-bookmark-btn.is-pinned svg { fill: var(--coral); }
 .quote-section { padding: 3rem clamp(1rem, 6vw, 8rem); display: grid; grid-template-columns: auto 1fr; align-items: center; gap: clamp(.75rem, 4vw, 5rem); background: var(--sky); border-block: 2px solid var(--ink); }
 .quote-section svg { display: none; }
 .giant-quote { align-self: start; color: var(--coral); font-family: Georgia, serif; font-size: clamp(4.5rem, 14vw, 11rem); line-height: .8; }
@@ -888,16 +1097,6 @@ footer p { font-size: .75rem; opacity: .7; text-align: center; flex: 1; min-widt
 .pdf-clear-btn svg { width: .85rem; height: .85rem; }
 .pdf-warning { margin: 0; font-size: .72rem; font-weight: 700; color: oklch(0.48 0.15 70); background: oklch(0.96 0.12 88); border: 1.5px solid oklch(0.78 0.18 80); border-radius: .3rem; padding: .35rem .6rem; }
 .pdf-error { margin: 0; font-size: .72rem; font-weight: 700; color: var(--destructive); background: oklch(0.97 0.04 20); border: 1.5px solid var(--destructive); border-radius: .3rem; padding: .35rem .6rem; }
-
-/* ─── PDF pill on book card ────────────────────────────────────────────────── */
-.card-pdf-row { padding: 0 1rem .85rem; }
-.pdf-pill { display: inline-flex; align-items: center; gap: .3rem; height: 1.9rem; padding: 0 .75rem; border: 1.5px solid var(--ink); border-radius: 999px; background: var(--sky); color: var(--ink); font-size: .68rem; font-weight: 800; cursor: pointer; transition: background .15s, transform .12s, box-shadow .12s; box-shadow: 2px 2px 0 color-mix(in oklab, var(--ink) 30%, transparent); white-space: nowrap; }
-.pdf-pill:hover { background: var(--mint); transform: translateY(-1px); box-shadow: 3px 3px 0 color-mix(in oklab, var(--ink) 40%, transparent); }
-
-/* ─── Edit / delete icon buttons on cards ─────────────────────────────────── */
-.card-icon-btn { flex: none; width: 2.1rem; height: 2.1rem; border-radius: 50%; color: var(--muted-foreground); transition: color .15s, background .15s; }
-.card-icon-btn:hover { color: var(--ink); background: var(--yellow); }
-.card-icon-btn--danger:hover { color: var(--destructive); background: oklch(0.97 0.04 20); }
 
 /* ─── Genre tags and filtering ────────────────────────────────────────────── */
 .book-meta-row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin: .35rem 0 .75rem; flex-wrap: wrap; }
