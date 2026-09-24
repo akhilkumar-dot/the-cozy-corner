@@ -9,6 +9,39 @@ export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl!, supabaseAnonKey!)
   : null;
 
+export type DbUserPrefs = {
+  id: string;
+  current_read_id: string | null;
+  up_next_ids: string[];
+  updated_at?: string;
+};
+
+export async function fetchUserPrefs(): Promise<DbUserPrefs | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from("user_prefs")
+    .select("*")
+    .eq("id", "default")
+    .maybeSingle();
+  if (error) {
+    console.error("Error fetching user prefs:", error);
+    return null;
+  }
+  return data as DbUserPrefs | null;
+}
+
+export async function saveUserPrefs(prefs: Pick<DbUserPrefs, "current_read_id" | "up_next_ids">): Promise<boolean> {
+  if (!supabase) return false;
+  const { error } = await supabase
+    .from("user_prefs")
+    .upsert({ id: "default", ...prefs, updated_at: new Date().toISOString() }, { onConflict: "id" });
+  if (error) {
+    console.error("Error saving user prefs:", error);
+    return false;
+  }
+  return true;
+}
+
 export type DbBookRow = {
   id: string;
   title: string;

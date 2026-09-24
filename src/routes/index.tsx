@@ -37,9 +37,11 @@ import {
   deleteBookFromDb,
   deletePdfFromStorage,
   fetchBooksFromDb,
+  fetchUserPrefs,
   getPdfUrlFromStorage,
   isSupabaseConfigured,
   saveBookToDb,
+  saveUserPrefs,
   seedBooksInDb,
   supabase,
   uploadCoverToStorage,
@@ -691,24 +693,32 @@ function Index() {
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [migrating, setMigrating] = useState(false);
   const [migrationStatus, setMigrationStatus] = useState<string | null>(null);
-  const [currentReadId, setCurrentReadId] = useState<string | null>(null);
+  const [currentReadId, setCurrentReadId] = useState<string | null>(() =>
+    localStorage.getItem("book-nook-current-read-v1")
+  );
   const [heroPickerMode, setHeroPickerMode] = useState<HeroPickerMode>(null);
   const [upNextIds, setUpNextIds] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem("book-nook-up-next-v1") ?? "[]") as string[]; }
     catch { return []; }
   });
 
-  // Persist up-next list to localStorage
+  // Persist up-next + current read to localStorage AND Supabase
   useEffect(() => {
     localStorage.setItem("book-nook-up-next-v1", JSON.stringify(upNextIds));
+    if (isSupabaseConfigured) {
+      void saveUserPrefs({ current_read_id: currentReadId, up_next_ids: upNextIds });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [upNextIds]);
 
   useEffect(() => {
-    setCurrentReadId(localStorage.getItem("book-nook-current-read-v1"));
-  }, []);
-
-  useEffect(() => {
-    if (currentReadId) localStorage.setItem("book-nook-current-read-v1", currentReadId);
+    if (currentReadId !== null) {
+      localStorage.setItem("book-nook-current-read-v1", currentReadId);
+    }
+    if (isSupabaseConfigured) {
+      void saveUserPrefs({ current_read_id: currentReadId, up_next_ids: upNextIds });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentReadId]);
 
   const handleMigrate = async () => {
@@ -800,7 +810,7 @@ function Index() {
           }
 
           // Fetch the full merged list from Supabase
-          const dbRows = await fetchBooksFromDb();
+          const [dbRows, dbPrefs] = await Promise.all([fetchBooksFromDb(), fetchUserPrefs()]);
           if (cancelled) return;
 
           if (dbRows && dbRows.length > 0) {
@@ -811,6 +821,19 @@ function Index() {
           } else {
             // Cloud is empty — seed it with local books
             await seedBooksInDb(localBooks.map(bookToRow));
+          }
+
+          // Apply cloud user prefs (current read + up next) — cloud is source of truth
+          if (dbPrefs) {
+            if (dbPrefs.current_read_id) {
+              setCurrentReadId(dbPrefs.current_read_id);
+              localStorage.setItem("book-nook-current-read-v1", dbPrefs.current_read_id);
+            }
+            if (dbPrefs.up_next_ids && dbPrefs.up_next_ids.length > 0) {
+              const capped = dbPrefs.up_next_ids.slice(0, 3);
+              setUpNextIds(capped);
+              localStorage.setItem("book-nook-up-next-v1", JSON.stringify(capped));
+            }
           }
         } catch (err) {
           console.error("Supabase sync error:", err);
@@ -952,10 +975,19 @@ function Index() {
     return [...pinned, ...fallbacks].slice(0, 3);
   }, [books, upNextIds, currentBook]);
 
+  const MAX_UP_NEXT = 3;
+
   const toggleUpNext = (bookId: string) => {
     setUpNextIds((prev) => {
-      if (prev.includes(bookId)) return prev.filter((id) => id !== bookId);
-      if (prev.length >= 3) { toast("Queue is full (max 3)", { description: "Remove a book from Up Next first." }); return prev; }
+      if (prev.includes(bookId)) {
+        toast("Removed from Up Next", { description: books.find((b) => b.id === bookId)?.title });
+        return prev.filter((id) => id !== bookId);
+      }
+      if (prev.length >= MAX_UP_NEXT) {
+        toast.error(`Up Next is full (max ${MAX_UP_NEXT})`, { description: "Remove a book from Up Next first." });
+        return prev;
+      }
+      toast("Added to Up Next 📖", { description: books.find((b) => b.id === bookId)?.title });
       return [...prev, bookId];
     });
   };
