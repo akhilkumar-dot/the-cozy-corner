@@ -1312,13 +1312,35 @@ function Index() {
   };
 
   const openPdf = async (bookId: string) => {
+    // On mobile, triggering a download fires the OS "Open with" sheet (WPS, Drive, etc.)
+    // On desktop we keep the existing new-tab behaviour.
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    const triggerDownload = (url: string, filename: string, revoke?: () => void) => {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.rel = "noopener noreferrer";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      if (revoke) window.setTimeout(revoke, 10_000);
+    };
+
     try {
       // 1. Check local IndexedDB first (works offline & preserves existing local PDFs)
       const blob = await getPdf(bookId);
       if (blob) {
         const url = URL.createObjectURL(blob);
-        window.open(url, "_blank");
-        window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+        // Find the book to get a nice filename
+        const book = books.find((b) => b.id === bookId);
+        const filename = book?.pdfFileName ?? `${book?.title ?? "book"}.pdf`;
+        if (isMobile) {
+          triggerDownload(url, filename, () => URL.revokeObjectURL(url));
+        } else {
+          window.open(url, "_blank");
+          window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+        }
         return;
       }
 
@@ -1326,7 +1348,13 @@ function Index() {
       if (isSupabaseConfigured) {
         const publicUrl = await getPdfUrlFromStorage(bookId);
         if (publicUrl) {
-          window.open(publicUrl, "_blank");
+          const book = books.find((b) => b.id === bookId);
+          const filename = book?.pdfFileName ?? `${book?.title ?? "book"}.pdf`;
+          if (isMobile) {
+            triggerDownload(publicUrl, filename);
+          } else {
+            window.open(publicUrl, "_blank");
+          }
           return;
         }
       }
