@@ -1444,6 +1444,16 @@ function Index() {
                     >
                       <BookOpen size={13} /> View details
                     </button>
+                    {currentBook.hasPdf && (
+                      <button
+                        type="button"
+                        className="pdf-pill"
+                        onClick={() => openPdf(currentBook.id)}
+                        title="Open PDF"
+                      >
+                        <FileText size={13} /> Read PDF
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
