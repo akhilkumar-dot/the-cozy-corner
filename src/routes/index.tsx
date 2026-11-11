@@ -26,6 +26,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -69,13 +70,19 @@ type Book = {
   genre?: string | undefined;
 };
 
+function cleanDescription(desc?: string | null): string {
+  if (!desc) return "";
+  if (desc.includes("A story waiting for its turn on the shelf")) return "";
+  return desc.trim();
+}
+
 function rowToBook(row: DbBookRow): Book {
   return {
     id: row.id,
     title: row.title,
     author: row.author,
     cover: row.cover || "",
-    description: row.description || "",
+    description: cleanDescription(row.description),
     status: row.status,
     genre: row.genre || "Fiction",
     addedAt: Number(row.added_at),
@@ -177,15 +184,14 @@ const seedPairs = [
   ["Days at the Torunka Café", "Satoshi Yagisawa"],
 ] as const;
 
-const defaultDescription =
-  "A story waiting for its turn on the shelf. Add your own notes after reading, or let the book details fill in automatically.";
+const defaultDescription = "";
 
 const seededBooks: Book[] = seedPairs.map(([title, author], index) => ({
   id: `seed-${index + 1}`,
   title,
   author,
   cover: "",
-  description: defaultDescription,
+  description: "",
   status: "TBR",
   addedAt: Date.now() - index,
   loading: true,
@@ -691,6 +697,7 @@ function Index() {
   const [modalOpen, setModalOpen] = useState(false);
   const [celebrating, setCelebrating] = useState<string | null>(null);
   const [editingBook, setEditingBook] = useState<Book | null>(null);
+  const [bookToDelete, setBookToDelete] = useState<Book | null>(null);
   const [migrating, setMigrating] = useState(false);
   const [migrationStatus, setMigrationStatus] = useState<string | null>(null);
   const [currentReadId, setCurrentReadId] = useState<string | null>(null);
@@ -790,6 +797,7 @@ function Index() {
           const parsed = JSON.parse(saved) as Book[];
           localBooks = parsed.map((book) => ({
             ...book,
+            description: cleanDescription(book.description),
             genre: book.genre || seedGenreMap[book.title] || "Fiction",
           }));
         }
@@ -803,7 +811,10 @@ function Index() {
         if (idbBooks && idbBooks.length > 0) {
           // If IndexedDB has more books or restored covers, prefer IndexedDB
           if (idbBooks.length >= localBooks.length) {
-            localBooks = idbBooks;
+            localBooks = idbBooks.map((b) => ({
+              ...b,
+              description: cleanDescription(b.description),
+            }));
           }
         }
       } catch {
@@ -1214,18 +1225,27 @@ function Index() {
     toast("Moved back to TBR", { description: target.title });
   };
 
-  const removeBook = (book: Book) => {
-    if (window.confirm(`Remove "${book.title}" from your nook?`)) {
-      setBooks((current) => current.filter((item) => item.id !== book.id));
-      if (book.hasPdf) {
-        void deletePdf(book.id);
-        if (isSupabaseConfigured) void deletePdfFromStorage(book.id);
-      }
-      if (isSupabaseConfigured) {
-        void deleteBookFromDb(book.id);
-      }
-      toast("Book removed", { description: book.title });
+  const handleRequestDelete = (book: Book) => {
+    setBookToDelete(book);
+  };
+
+  const confirmDeleteBook = () => {
+    if (!bookToDelete) return;
+    const book = bookToDelete;
+    setBooks((current) => current.filter((item) => item.id !== book.id));
+    if (book.hasPdf) {
+      void deletePdf(book.id);
+      if (isSupabaseConfigured) void deletePdfFromStorage(book.id);
     }
+    if (isSupabaseConfigured) {
+      void deleteBookFromDb(book.id);
+    }
+    if (currentReadId === book.id) {
+      setCurrentReadId(null);
+    }
+    setUpNextIds((prev) => prev.filter((id) => id !== book.id));
+    toast.success("Book removed", { description: `"${book.title}" was removed from your nook.` });
+    setBookToDelete(null);
   };
 
   const addBook = async (book: Book, pdfFile?: File | null) => {
@@ -1351,11 +1371,13 @@ function Index() {
   };
 
   return (
-    <main className="min-h-screen overflow-hidden bg-cream text-ink">
+    <main className="min-h-screen overflow-hidden bg-background text-ink">
       <header className="site-header">
         <a href="#top" className="logo-mark" aria-label="The Book Nook home">
-          <span className="logo-icon-box"><BookOpen size={16} /></span>
-          THE BOOK NOOK
+          <span className="logo-icon-box">
+            <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
+          </span>
+          The Book Nook.
         </a>
         <nav>
           <a href="#shelves">My shelf</a>
@@ -1374,7 +1396,7 @@ function Index() {
           )}
         </nav>
 
-        <Button onClick={() => setModalOpen(true)} className="rounded-full border-2 border-ink bg-coral px-3 md:px-5 font-display text-ink shadow-button hover:bg-coral/90 text-sm md:text-base whitespace-nowrap">+ Add a Book</Button>
+        <Button onClick={() => setModalOpen(true)} className="rounded-full border-2 border-ink bg-yellow px-3 md:px-5 font-display text-ink shadow-button hover:bg-white text-sm md:text-base whitespace-nowrap font-bold">+ Add a Book</Button>
       </header>
 
       <section id="top" className="hero-section">
@@ -1382,7 +1404,7 @@ function Index() {
           <div className="hero-stage">
             <div className="hero-copy">
               <div className="eyebrow"><Sparkles size={14} /> Your next favorite is in here</div>
-              <h1 className="hero-title">Read more.<br /><span>Feel everything.</span></h1>
+              <h1 className="hero-title">Dive In to Inspiring<br /><span>Stories & Chapters.</span></h1>
               <p>Every plot twist, late-night chapter, and someday read—right where you need it.</p>
               <div className="hero-action-row">
                 <Button onClick={() => setModalOpen(true)} className="hero-primary-action">Add a book <BookHeart size={16} /></Button>
@@ -1397,7 +1419,14 @@ function Index() {
               </div>
             </div>
 
-            <article className="hero-card hcard-reading">
+            <article className="hero-card hcard-reading relative">
+              <div className="hero-soundwave-sticker" aria-hidden="true">
+                <span className="soundwave-bar" style={{ animationDelay: '0s' }} />
+                <span className="soundwave-bar" style={{ animationDelay: '0.2s' }} />
+                <span className="soundwave-bar" style={{ animationDelay: '0.4s' }} />
+                <span className="soundwave-bar" style={{ animationDelay: '0.1s' }} />
+                <span className="soundwave-bar" style={{ animationDelay: '0.3s' }} />
+              </div>
               <div className="hcard-topline">
                 <div className="hcard-label"><BookOpen size={14} /> CURRENT READ</div>
                 <Button type="button" variant="ghost" className="hcard-choose" onClick={() => setHeroPickerMode("current")}>Choose book</Button>
@@ -1414,8 +1443,8 @@ function Index() {
                     <span className="hero-feature-kicker">ON YOUR NIGHTSTAND</span>
                     <h3>{currentBook.title}</h3>
                     <p className="hcard-author">by {currentBook.author}</p>
-                    {currentBook.description && (
-                      <blockquote className="hcard-quote">“{currentBook.description.replace(/<[^>]*>/g, " ").slice(0, 92).trim()}…”</blockquote>
+                    {cleanDescription(currentBook.description) && (
+                      <blockquote className="hcard-quote">“{cleanDescription(currentBook.description).replace(/<[^>]*>/g, " ").slice(0, 92).trim()}…”</blockquote>
                     )}
                     <div className="hcard-actions-row">
                       <Button type="button" className="hcard-complete-btn" onClick={() => handleCompleteBook(currentBook.id)} title="Mark this book as completed">
@@ -1439,10 +1468,34 @@ function Index() {
           </div>
 
           <div className="hero-stats-band" aria-label="Reading statistics">
-            <div className="hero-stat"><strong>{completed}</strong><span>Stories finished</span></div>
-            <div className="hero-stat"><strong>{tbr}</strong><span>On your TBR</span></div>
-            <div className="hero-stat"><strong>{reading > 0 ? reading : (currentBook ? 1 : 0)}</strong><span>Reading now</span></div>
-            <div className="hero-stat"><strong>{books.length}</strong><span>In your nook</span></div>
+            <div className="hero-stat">
+              <span className="hero-stat-icon-badge" aria-hidden="true"><Library size={18} /></span>
+              <div className="hero-stat-text">
+                <strong>{books.length}</strong>
+                <span>Books In Nook</span>
+              </div>
+            </div>
+            <div className="hero-stat">
+              <span className="hero-stat-icon-badge" aria-hidden="true"><Check size={18} /></span>
+              <div className="hero-stat-text">
+                <strong>{completed}</strong>
+                <span>Stories Finished</span>
+              </div>
+            </div>
+            <div className="hero-stat">
+              <span className="hero-stat-icon-badge" aria-hidden="true"><Bookmark size={18} /></span>
+              <div className="hero-stat-text">
+                <strong>{tbr}</strong>
+                <span>On Your TBR</span>
+              </div>
+            </div>
+            <div className="hero-stat">
+              <span className="hero-stat-icon-badge" aria-hidden="true"><Sparkles size={18} /></span>
+              <div className="hero-stat-text">
+                <strong>{reading > 0 ? reading : (currentBook ? 1 : 0)}</strong>
+                <span>Reading Now</span>
+              </div>
+            </div>
           </div>
 
           <div className="hero-bottom-grid">
@@ -1536,7 +1589,9 @@ function Index() {
                   {book.genre && <span className="genre-tag">{book.genre}</span>}
                 </div>
                 <h3>{book.title}</h3>
-                <p className="description">{book.description.replace(/<[^>]*>/g, " ")}</p>
+                {cleanDescription(book.description) && (
+                  <p className="description">{cleanDescription(book.description).replace(/<[^>]*>/g, " ")}</p>
+                )}
               </div>
               <div className="card-footer-actions">
                 <div className="card-actions-row">
@@ -1570,7 +1625,7 @@ function Index() {
                       <Bookmark size={14} />
                     </Button>
                     <Button variant="ghost" size="icon" onClick={() => handleEditOpen(book)} aria-label={`Edit ${book.title}`} title="Edit book" className="card-icon-btn"><Pencil size={14} /></Button>
-                    <Button variant="ghost" size="icon" onClick={() => removeBook(book)} aria-label={`Remove ${book.title}`} title="Remove book" className="card-icon-btn card-icon-btn--danger"><Trash2 size={14} /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleRequestDelete(book)} aria-label={`Remove ${book.title}`} title="Remove book" className="card-icon-btn card-icon-btn--danger"><Trash2 size={14} /></Button>
                   </div>
                 </div>
                 {book.hasPdf && (
@@ -1588,8 +1643,62 @@ function Index() {
 
       <section id="quote" className="quote-section"><span className="giant-quote">"</span><div><p>A room without books is like a body without a soul.</p><span>— Marcus Tullius Cicero</span></div><svg viewBox="0 0 170 170" aria-hidden="true"><circle className="fill-yellow stroke-ink" cx="85" cy="86" r="59" strokeWidth="3" /><path className="fill-coral stroke-ink" strokeWidth="3" d="M47 115V53h61v62l-30-17Z" /><path className="stroke-ink" strokeWidth="4" strokeLinecap="round" d="M129 28l9-13m10 32 15-4m-31 7 9 9" /></svg></section>
 
-      <section className="cta-band"><div><span className="eyebrow plain">ONE MORE CHAPTER?</span><h2>Add your next <em>great read.</em></h2><Button onClick={() => setModalOpen(true)} className="hero-button">Add a Book <BookHeart /></Button></div><div className="cta-stack"><BookPlaceholder title="Your next favorite" tone={3} /></div></section>
-      <footer><a href="#top" className="logo-mark"><span>THE</span> BOOK NOOK <BookOpen /></a><p>Made for slow mornings, late nights, and very full shelves.</p><a href="#shelves">Back to my shelf ↑</a></footer>
+      <section className="cta-band">
+        <div className="max-w-xl mx-auto text-center flex flex-col items-center">
+          <span className="eyebrow plain">ONE MORE CHAPTER?</span>
+          <h2>Add your next <em>great read.</em></h2>
+          <Button onClick={() => setModalOpen(true)} className="hero-button">Add a Book <BookHeart /></Button>
+        </div>
+      </section>
+      <footer>
+        <a href="#top" className="logo-mark">
+          <span className="logo-icon-box">
+            <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
+          </span>
+          The Book Nook.
+        </a>
+        <p>Made for slow mornings, late nights, and very full shelves.</p>
+        <a href="#shelves">Back to my shelf ↑</a>
+      </footer>
+
+
+      {/* Custom in-app confirmation modal for deleting books */}
+      <Dialog open={bookToDelete !== null} onOpenChange={(open) => { if (!open) setBookToDelete(null); }}>
+        <DialogContent className="max-w-md border-2 border-ink bg-card p-6 shadow-playful rounded-xl sm:rounded-xl">
+          <div className="flex items-start gap-3.5">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border-2 border-ink bg-coral/20 text-coral shadow-[2px_2px_0_var(--ink)]">
+              <Trash2 className="h-5 w-5 text-coral" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <DialogTitle className="font-display text-xl font-extrabold text-ink">
+                Remove from your nook?
+              </DialogTitle>
+              <DialogDescription className="mt-1.5 text-sm text-ink/75 leading-relaxed">
+                Are you sure you want to remove <strong className="text-ink font-bold">"{bookToDelete?.title}"</strong>
+                {bookToDelete?.author ? ` by ${bookToDelete.author}` : ""}? This cannot be undone.
+              </DialogDescription>
+            </div>
+          </div>
+
+          <DialogFooter className="mt-5 flex flex-row items-center justify-end gap-2.5 sm:gap-2.5">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setBookToDelete(null)}
+              className="h-10 rounded-lg border-2 border-ink bg-background px-4 font-display font-bold text-ink shadow-[2px_2px_0_var(--ink)] hover:bg-yellow transition-all"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={confirmDeleteBook}
+              className="h-10 rounded-lg border-2 border-ink bg-coral px-4 font-display font-bold text-ink shadow-[2px_2px_0_var(--ink)] hover:bg-red-500 hover:text-white transition-all flex items-center gap-1.5"
+            >
+              <Trash2 size={15} /> Yes, remove
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add book modal */}
       <BookModal open={modalOpen} onOpenChange={setModalOpen} onAdd={addBook} />
