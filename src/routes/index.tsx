@@ -693,14 +693,9 @@ function Index() {
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [migrating, setMigrating] = useState(false);
   const [migrationStatus, setMigrationStatus] = useState<string | null>(null);
-  const [currentReadId, setCurrentReadId] = useState<string | null>(() =>
-    localStorage.getItem("book-nook-current-read-v1")
-  );
+  const [currentReadId, setCurrentReadId] = useState<string | null>(null);
   const [heroPickerMode, setHeroPickerMode] = useState<HeroPickerMode>(null);
-  const [upNextIds, setUpNextIds] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem("book-nook-up-next-v1") ?? "[]") as string[]; }
-    catch { return []; }
-  });
+  const [upNextIds, setUpNextIds] = useState<string[]>([]);
 
   const prefsLoadedRef = useRef(false);
   const isRemotePrefsUpdateRef = useRef(false);
@@ -778,6 +773,15 @@ function Index() {
     let cancelled = false;
 
     async function initBooks() {
+      try {
+        setCurrentReadId(localStorage.getItem("book-nook-current-read-v1"));
+        const savedUpNext = JSON.parse(localStorage.getItem("book-nook-up-next-v1") ?? "[]") as unknown;
+        setUpNextIds(Array.isArray(savedUpNext) ? savedUpNext.filter((id): id is string => typeof id === "string") : []);
+      } catch {
+        setCurrentReadId(null);
+        setUpNextIds([]);
+      }
+
       // 1. Instant load from localStorage & IndexedDB — show books immediately, no flash
       let localBooks: Book[] = seededBooks;
       try {
@@ -1374,152 +1378,104 @@ function Index() {
       </header>
 
       <section id="top" className="hero-section">
-        {/* ── Top: headline text + yellow stamp sticker ── */}
-        <div className="hero-intro">
-          <div className="hero-text-content">
-            <div className="eyebrow"><Sparkles size={14} /> A quiet corner for loud stories</div>
-            <h1 className="hero-title">A life lived in<br /><span>chapters.</span></h1>
-            <div className="hero-desc-row">
-              <p>Keep every maybe, someday, and couldn't-put-it-down read in one beautifully unruly place.</p>
-              <button
-                type="button"
-                className="hero-browse-link"
-                onClick={() => document.getElementById("shelves")?.scrollIntoView({ behavior: "smooth" })}
-              >
-                BROWSE MY SHELF <ArrowRight size={14} />
-              </button>
+        <div className="hero-inner">
+          <div className="hero-stage">
+            <div className="hero-copy">
+              <div className="eyebrow"><Sparkles size={14} /> Your next favorite is in here</div>
+              <h1 className="hero-title">Read more.<br /><span>Feel everything.</span></h1>
+              <p>Every plot twist, late-night chapter, and someday read—right where you need it.</p>
+              <div className="hero-action-row">
+                <Button onClick={() => setModalOpen(true)} className="hero-primary-action">Add a book <BookHeart size={16} /></Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="hero-browse-link"
+                  onClick={() => document.getElementById("shelves")?.scrollIntoView({ behavior: "smooth" })}
+                >
+                  Browse my shelf <ArrowRight size={15} />
+                </Button>
+              </div>
             </div>
-          </div>
 
-          <div className="hero-stamp-sticker" aria-hidden="true" title="Keep reading">
-            <div className="hero-stamp-stars">
-              <span>✦</span>
-              <span>✦</span>
-              <span>✦</span>
-              <span>✦</span>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Dashboard — 2×2 grid matching reference image ── */}
-        <div className="hero-dashboard">
-
-          {/* Cell [1,1] — Currently Reading */}
-          <div className="hero-card hcard-reading">
-            <div className="hcard-corner-ribbon" aria-hidden="true">
-              <svg viewBox="0 0 60 60" className="w-full h-full">
-                <polygon points="0,0 60,0 60,60" fill="var(--yellow)" />
-                <line x1="0" y1="0" x2="60" y2="60" stroke="var(--ink)" strokeWidth="2.5" />
-              </svg>
-            </div>
-            <div className="hcard-topline">
-              <div className="hcard-label">● CURRENTLY READING</div>
-              <Button type="button" variant="ghost" className="hcard-choose" onClick={() => setHeroPickerMode("current")}>Choose book</Button>
-            </div>
-            {currentBook ? (
-              <div className="hcard-reading-body">
-                {currentBook.cover && !currentBook.loading
-                  ? <img src={currentBook.cover} alt={currentBook.title} className="hcard-book-img" onError={(e) => { e.currentTarget.style.display = "none"; }} />
-                  : <div className="hcard-book-img hcard-book-img--empty"><BookOpen size={28} /></div>
-                }
-                <div className="hcard-reading-info">
-                  <h3>{currentBook.title}</h3>
-                  <p className="hcard-author">{currentBook.author}</p>
-                  {currentBook.description && (
-                    <blockquote className="hcard-quote">"{currentBook.description.replace(/<[^>]*>/g, " ").slice(0, 75).trim()}…"</blockquote>
-                  )}
-                  <div className="hcard-actions-row">
-                    <button
-                      type="button"
-                      className="hcard-complete-btn"
-                      onClick={() => handleCompleteBook(currentBook.id)}
-                      title="Mark this book as completed"
-                    >
-                      <Check size={13} /> Mark Completed
-                    </button>
-                    <button
-                      type="button"
-                      className="hcard-update-btn"
-                      onClick={() => handleEditOpen(currentBook)}
-                    >
-                      <BookOpen size={13} /> View details
-                    </button>
-                    {currentBook.hasPdf && (
-                      <button
-                        type="button"
-                        className="pdf-pill"
-                        onClick={() => openPdf(currentBook.id)}
-                        title="Open PDF"
-                      >
-                        <FileText size={13} /> Read PDF
-                      </button>
+            <article className="hero-card hcard-reading">
+              <div className="hcard-topline">
+                <div className="hcard-label"><BookOpen size={14} /> CURRENT READ</div>
+                <Button type="button" variant="ghost" className="hcard-choose" onClick={() => setHeroPickerMode("current")}>Choose book</Button>
+              </div>
+              {currentBook ? (
+                <div className="hcard-reading-body">
+                  <div className="hero-feature-cover">
+                    {currentBook.cover && !currentBook.loading
+                      ? <img src={currentBook.cover} alt={`Cover of ${currentBook.title}`} onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.nextElementSibling?.classList.remove("hidden"); }} />
+                      : null}
+                    <div className={`hero-feature-placeholder${currentBook.cover && !currentBook.loading ? " hidden" : ""}`}><BookPlaceholder title={currentBook.title} /></div>
+                  </div>
+                  <div className="hcard-reading-info">
+                    <span className="hero-feature-kicker">ON YOUR NIGHTSTAND</span>
+                    <h3>{currentBook.title}</h3>
+                    <p className="hcard-author">by {currentBook.author}</p>
+                    {currentBook.description && (
+                      <blockquote className="hcard-quote">“{currentBook.description.replace(/<[^>]*>/g, " ").slice(0, 92).trim()}…”</blockquote>
                     )}
+                    <div className="hcard-actions-row">
+                      <Button type="button" className="hcard-complete-btn" onClick={() => handleCompleteBook(currentBook.id)} title="Mark this book as completed">
+                        <Check size={13} /> Mark completed
+                      </Button>
+                      <Button type="button" variant="ghost" className="hcard-update-btn" onClick={() => handleEditOpen(currentBook)}>
+                        <BookOpen size={13} /> Details
+                      </Button>
+                      {currentBook.hasPdf && <Button type="button" variant="ghost" className="pdf-pill" onClick={() => openPdf(currentBook.id)} title="Open PDF"><FileText size={13} /> Read PDF</Button>}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ) : (
-              <div className="hcard-reading-empty">
-                <BookOpen size={32} />
-                <p>No book selected yet</p>
-                <span>On any book card tap <strong>"Start reading"</strong> to set it here.</span>
-              </div>
-            )}
-          </div>
-
-          {/* Cell [1,2] — 2×2 Stat mini-cards */}
-          <div className="hero-stats-grid">
-            <div className="hstat hstat--mint">
-              <span>FINISHED</span>
-              <strong>{completed || 24}</strong>
-            </div>
-            <div className="hstat hstat--yellow">
-              <span>IN THE QUEUE</span>
-              <strong>{tbr || 12}</strong>
-            </div>
-            <div className="hstat hstat--coral">
-              <span>READING NOW</span>
-              <strong>{reading > 0 ? reading : (currentBook ? 1 : 0)}</strong>
-            </div>
-            <div className="hstat hstat--white">
-              <span>TOTAL BOOKS</span>
-              <strong>{books.length || 36}</strong>
-            </div>
-          </div>
-
-          {/* Cell [2,1] — Up Next */}
-          <div className="hero-card hcard-queue">
-            <div className="hcard-queue-header">
-              <span className="hcard-queue-title">Up next</span>
-              <Button type="button" variant="ghost" className="hcard-queue-viewall" onClick={() => setHeroPickerMode("up-next")}>CHOOSE BOOKS</Button>
-            </div>
-            {displayedUpNext.length > 0 ? displayedUpNext.map((b, i) => {
-              const badgeClass = i === 0 ? "hqueue-badge--yellow" : i === 1 ? "hqueue-badge--mint" : "hqueue-badge--coral";
-              return (
-                <div key={b.id} className="hcard-queue-item" onClick={() => handleEditOpen(b)} role="button" tabIndex={0}>
-                  <span className={`hqueue-badge ${badgeClass}`}>0{i + 1}</span>
-                  <div className="hqueue-info">
-                    <span className="hqueue-title">{b.title}</span>
-                    {b.author && <span className="hqueue-author">{b.author}</span>}
-                  </div>
-                  <ChevronRight size={14} className="hqueue-arrow" />
+              ) : (
+                <div className="hcard-reading-empty">
+                  <BookOpen size={32} />
+                  <p>What are you reading?</p>
+                  <Button type="button" variant="ghost" className="hero-empty-choose" onClick={() => setHeroPickerMode("current")}>Choose your current read <ArrowRight size={15} /></Button>
                 </div>
-              );
-            }) : (
-              <div className="hqueue-empty-state">
-                <p>Pin up to 3 books using the <Bookmark size={11} /> bookmark button on any book card.</p>
+              )}
+            </article>
+          </div>
+
+          <div className="hero-stats-band" aria-label="Reading statistics">
+            <div className="hero-stat"><strong>{completed}</strong><span>Stories finished</span></div>
+            <div className="hero-stat"><strong>{tbr}</strong><span>On your TBR</span></div>
+            <div className="hero-stat"><strong>{reading > 0 ? reading : (currentBook ? 1 : 0)}</strong><span>Reading now</span></div>
+            <div className="hero-stat"><strong>{books.length}</strong><span>In your nook</span></div>
+          </div>
+
+          <div className="hero-bottom-grid">
+            <div className="hero-card hcard-queue">
+              <div className="hcard-queue-header">
+                <span className="hcard-queue-title">Up next</span>
+                <Button type="button" variant="ghost" className="hcard-queue-viewall" onClick={() => setHeroPickerMode("up-next")}>Choose books</Button>
               </div>
-            )}
-          </div>
-
-          {/* Cell [2,2] — Book Wishlist */}
-          <div className="hero-card hcard-wishlist" onClick={() => setModalOpen(true)} role="button" tabIndex={0}>
-            <div className="hcard-wishlist-icon-badge">
-              <BookHeart size={22} />
+              {displayedUpNext.length > 0 ? displayedUpNext.map((b, i) => {
+                const badgeClass = i === 0 ? "hqueue-badge--yellow" : i === 1 ? "hqueue-badge--mint" : "hqueue-badge--coral";
+                return (
+                  <div key={b.id} className="hcard-queue-item" onClick={() => handleEditOpen(b)} role="button" tabIndex={0}>
+                    <span className={`hqueue-badge ${badgeClass}`}>0{i + 1}</span>
+                    <div className="hqueue-info">
+                      <span className="hqueue-title">{b.title}</span>
+                      {b.author && <span className="hqueue-author">{b.author}</span>}
+                    </div>
+                    <ChevronRight size={14} className="hqueue-arrow" />
+                  </div>
+                );
+              }) : (
+                <div className="hqueue-empty-state">
+                  <p>Your next chapter starts here. Choose up to three books for your reading queue.</p>
+                </div>
+              )}
             </div>
-            <h3>Book wishlist</h3>
-            <p>A soft landing place for future favorites</p>
-          </div>
 
+            <Button type="button" variant="ghost" className="hero-card hcard-wishlist" onClick={() => setModalOpen(true)}>
+              <span className="hcard-wishlist-icon-badge"><BookHeart size={22} /></span>
+              <span className="hcard-wishlist-copy"><strong>Find your next favorite</strong><small>Add a book to your nook</small></span>
+              <ArrowRight size={20} className="hcard-wishlist-arrow" />
+            </Button>
+          </div>
         </div>
       </section>
 
