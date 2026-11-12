@@ -772,29 +772,28 @@
 .search-box button { width: 2rem; height: 2rem; flex-shrink: 0; }
 .sort-box select, .form-select { appearance: none; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: .8rem; font-weight: 600; outline: 0; cursor: pointer; flex: 1; }
 .sort-box::after { content: "⌄"; font-weight: 800; flex-shrink: 0; }
-/* Mobile: single-column horizontal card layout */
-.book-grid { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: .75rem; }
-.book-card { min-width: 0; display: grid; grid-template-columns: 100px 1fr; grid-template-rows: 1fr auto; border: 2px solid var(--ink); border-radius: .6rem; background: var(--card); box-shadow: 4px 4px 0 color-mix(in oklab, var(--coral) 42%, transparent); position: relative; overflow: hidden; transition: transform .18s ease, box-shadow .18s ease; backface-visibility: hidden; -webkit-backface-visibility: hidden; container-type: inline-size; container-name: bookcard; }
-.book-card:hover { transform: translateY(-3px); box-shadow: 5px 6px 0 var(--coral); }
-.cover-wrap { height: 100%; min-height: 140px; grid-row: 1 / -1; display: grid; place-items: center; padding: .65rem; background: var(--lavender); border-right: 2px solid var(--ink); border-bottom: none; position: relative; overflow: hidden; }
-.cover-wrap > img { height: 100%; width: auto; max-width: 90%; max-height: 130px; object-fit: cover; border: 2px solid var(--ink); box-shadow: 3px 3px 0 color-mix(in oklab, var(--ink) 25%, transparent); }
+/* Default: grid layout (all sizes ≥ 480px) */
+.book-grid { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem; }
+.book-card { min-width: 0; display: flex; flex-direction: column; border: 2px solid var(--ink); border-radius: .4rem; background: var(--card); box-shadow: 4px 4px 0 color-mix(in oklab, var(--coral) 42%, transparent); position: relative; overflow: hidden; transition: transform .18s ease, box-shadow .18s ease; backface-visibility: hidden; -webkit-backface-visibility: hidden; container-type: inline-size; container-name: bookcard; }
+.book-card:hover { transform: translateY(-4px); box-shadow: 6px 7px 0 var(--coral); }
+.cover-wrap { height: 200px; display: grid; place-items: center; padding: 1rem; background: var(--lavender); border-bottom: 2px solid var(--ink); position: relative; overflow: hidden; }
+.cover-wrap > img { height: 100%; width: auto; max-width: 85%; object-fit: cover; border: 2px solid var(--ink); box-shadow: 4px 4px 0 color-mix(in oklab, var(--ink) 25%, transparent); }
 .book-placeholder { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .55rem; text-align: center; padding: .75rem; }
 .book-placeholder span { max-width: 18ch; font-family: var(--font-display); font-weight: 650; line-height: 1.05; font-size: .85rem; }
-.status-badge { position: absolute; z-index: 4; top: .4rem; left: .4rem; right: auto; padding: .22rem .45rem; border: 2px solid var(--ink); border-radius: 999px; background: var(--yellow); font-size: .55rem; font-weight: 800; text-transform: uppercase; box-shadow: 2px 2px 0 var(--ink); }
+.status-badge { position: absolute; z-index: 4; top: .5rem; right: .5rem; padding: .26rem .55rem; border: 2px solid var(--ink); border-radius: 999px; background: var(--yellow); font-size: .58rem; font-weight: 800; text-transform: uppercase; box-shadow: 2px 2px 0 var(--ink); }
 .status-badge.is-complete { background: var(--mint); }
 .cover-skeleton { width: 65%; height: 100%; border: 2px solid color-mix(in oklab, var(--ink) 25%, transparent); background: linear-gradient(90deg, var(--lavender), var(--cream), var(--lavender)); background-size: 200% 100%; animation: shimmer 1.3s infinite linear; }
-.book-info { padding: .65rem .75rem .4rem; flex: 1; grid-column: 2; }
-.book-info h3 { margin: 0; font-family: var(--font-display); font-size: .92rem; line-height: 1.1; overflow-wrap: anywhere; }
-.book-info .author { margin: .2rem 0 .4rem; color: var(--coral); font-size: .68rem; font-weight: 700; }
+.book-info { padding: .85rem .85rem .7rem; flex: 1; }
+.book-info h3 { margin: 0; font-family: var(--font-display); font-size: 1.05rem; line-height: 1.1; overflow-wrap: anywhere; }
+.book-info .author { margin: .28rem 0 .55rem; color: var(--coral); font-size: .7rem; font-weight: 700; }
 .book-info .description { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin: 0; color: var(--muted-foreground); font-size: .7rem; line-height: 1.6; }
 /* â”€â”€â”€ Card footer actions (responsive for all devices) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .card-footer-actions {
   display: flex;
   flex-direction: column;
-  gap: 0.38rem;
-  padding: 0 0.75rem 0.7rem;
+  gap: 0.42rem;
+  padding: 0 0.8rem 0.85rem;
   margin-top: auto;
-  grid-column: 2;
 }
 
 .card-actions-row {
@@ -1042,6 +1041,20 @@ footer p { font-size: .75rem; opacity: .7; text-align: center; flex: 1; min-widt
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    RESPONSIVE BREAKPOINTS  (mobile-first, min-width)
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+/* -- mobile only (<480px): horizontal card layout -- */
+@media (max-width: 479px) {
+  .shelf-section { padding: 2rem clamp(.75rem, 4vw, 5rem) 3.5rem; }
+  .book-grid { display: flex; flex-direction: column; gap: .75rem; }
+  .book-card { display: grid; grid-template-columns: 130px 1fr; grid-template-rows: 1fr auto; border-radius: .6rem; }
+  .cover-wrap { height: 100%; min-height: 140px; grid-row: 1 / -1; padding: .65rem; border-right: 2px solid var(--ink); border-bottom: none; }
+  .cover-wrap > img { max-height: 160px; max-width: 90%; }
+  .status-badge { top: .4rem; left: .4rem; right: auto; }
+  .book-info { padding: .65rem .75rem .4rem; grid-column: 2; }
+  .book-info h3 { font-size: .9rem; }
+  .book-info .author { margin: .2rem 0 .35rem; font-size: .67rem; }
+  .card-footer-actions { padding: 0 .75rem .7rem; gap: 0.35rem; grid-column: 2; }
+}
 
 /* â”€â”€ 480px: small phones landscape / larger phones â”€â”€ */
 @media (min-width: 480px) {
