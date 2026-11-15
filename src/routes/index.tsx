@@ -1596,16 +1596,14 @@ function Index() {
               </div>
               <div className="card-footer-actions">
                 <div className="card-actions-row">
-                  {(book.status === "Reading" || book.status === "Completed") && (
-                    <button
-                      type="button"
-                      onClick={() => toggleStatus(book.id)}
-                      className={`card-action-pill ${book.status === "Completed" ? "is-complete" : "is-reading"}`}
-                      title={book.status === "Completed" ? "Completed ✓ (click to revert)" : "Mark as Completed"}
-                    >
-                      <Check size={14} />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => book.status === "Completed" ? toggleStatus(book.id) : handleCompleteBook(book.id)}
+                    className={`card-action-pill ${book.status === "Completed" ? "is-complete" : ""}`}
+                    title={book.status === "Completed" ? "Completed ✓ (click to revert)" : "Mark as Completed"}
+                  >
+                    <Check size={14} />
+                  </button>
                   {book.hasPdf && (
                     <button type="button" className="card-action-pill is-pdf" onClick={() => openPdf(book.id)} title="Read PDF">
                       <FileText size={14} />

@@ -127,16 +127,18 @@ export async function deleteBookFromDb(id: string): Promise<boolean> {
 export async function seedBooksInDb(books: DbBookRow[]): Promise<boolean> {
   if (!supabase) return false;
 
-  // Fetch existing covers/descriptions so we don't overwrite them with empty values.
+  // Fetch existing covers/descriptions/status so we don't overwrite them with stale local values.
   const { data: existing } = await supabase
     .from("books")
-    .select("id, cover, description");
+    .select("id, cover, description, status");
   const existingMap = Object.fromEntries(
     (existing ?? []).map((r) => [r.id, r])
   );
 
   const merged = books.map((b) => ({
     ...b,
+    // Never downgrade a cloud status with a stale local status
+    status: existingMap[b.id]?.status ?? b.status,
     cover:
       b.cover && b.cover !== ""
         ? b.cover
