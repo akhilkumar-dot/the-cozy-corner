@@ -1596,13 +1596,20 @@ function Index() {
               </div>
               <div className="card-footer-actions">
                 <div className="card-actions-row">
-                  <Button
+                  <button
+                    type="button"
                     onClick={() => toggleStatus(book.id)}
-                    className={book.status === "Completed" ? "status-action is-complete" : book.status === "Reading" ? "status-action is-reading" : "status-action"}
+                    className={`card-action-pill ${book.status === "Completed" ? "is-complete" : book.status === "Reading" ? "is-reading" : ""}`}
+                    title={book.status === "Completed" ? "Completed ✓" : book.status === "Reading" ? "Mark as Completed" : "Start Reading"}
                   >
-                    {book.status === "Completed" ? <><BookOpen size={13} /> Completed</> : book.status === "Reading" ? <><Check size={13} /> Mark Completed</> : <><BookOpen size={13} /> Start reading</>}
-                  </Button>
-                  <div className="card-icon-group">
+                    {book.status === "Completed" ? <Check size={14} /> : book.status === "Reading" ? <Check size={14} /> : <BookOpen size={14} />}
+                  </button>
+                  {book.hasPdf && (
+                    <button type="button" className="card-action-pill is-pdf" onClick={() => openPdf(book.id)} title="Read PDF">
+                      <FileText size={14} />
+                    </button>
+                  )}
+                  <div className="card-icon-group" style={{marginLeft: 'auto'}}>
                     <Button
                       variant="ghost" size="icon"
                       onClick={() => toggleUpNext(book.id)}
@@ -1629,11 +1636,6 @@ function Index() {
                     <Button variant="ghost" size="icon" onClick={() => handleRequestDelete(book)} aria-label={`Remove ${book.title}`} title="Remove book" className="card-icon-btn card-icon-btn--danger"><Trash2 size={14} /></Button>
                   </div>
                 </div>
-                {book.hasPdf && (
-                  <button type="button" className="pdf-pill" onClick={() => openPdf(book.id)}>
-                    <FileText size={13} /> Read PDF
-                  </button>
-                )}
               </div>
               {celebrating === book.id && <div className="confetti" aria-hidden="true">✦ <span>♥</span> ★ <b>✦</b> ●</div>}
             </article>
