@@ -1121,9 +1121,9 @@ footer p { font-size: .75rem; opacity: .7; text-align: center; flex: 1; min-widt
   .card-primary-actions { flex-direction: column; gap: 0.35rem; width: 100%; }
   .card-btn-text { display: inline; }
   .card-action-pill {
-    width: 100% !important;
+    width: 50% !important;
     height: 2.25rem !important;
-    border-radius: 999px !important;
+    border-radius: 5px !important;
     padding: 0 0.9rem !important;
     display: flex !important;
     align-items: center !important;
