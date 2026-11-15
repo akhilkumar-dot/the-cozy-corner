@@ -804,6 +804,19 @@
   width: 100%;
 }
 
+/* Primary action group (complete + pdf) — desktop: row of circles */
+.card-primary-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+/* Text label inside pill — hidden on desktop, shown on mobile */
+.card-btn-text {
+  display: none;
+}
+
 .status-action {
   flex: 1 1 0%;
   min-width: 0;
@@ -867,6 +880,7 @@
   align-items: center;
   gap: 0.15rem;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .card-icon-btn {
@@ -1101,7 +1115,28 @@ footer p { font-size: .75rem; opacity: .7; text-align: center; flex: 1; min-widt
   .book-info { padding: .65rem .75rem .4rem; grid-column: 2; }
   .book-info h3 { font-size: .9rem; }
   .book-info .author { margin: .2rem 0 .35rem; font-size: .67rem; }
-  .card-footer-actions { padding: 0 .75rem .7rem; gap: 0.35rem; grid-column: 2; }
+  .card-footer-actions { padding: 0 .75rem .7rem; gap: 0.4rem; grid-column: 2; }
+  /* Primary action buttons: stack vertically, full equal width */
+  .card-actions-row { flex-direction: column; align-items: stretch; gap: 0.35rem; }
+  .card-primary-actions { flex-direction: column; gap: 0.35rem; width: 100%; }
+  .card-btn-text { display: inline; }
+  .card-action-pill {
+    width: 100% !important;
+    height: 2.25rem !important;
+    border-radius: 999px !important;
+    padding: 0 0.9rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.35rem !important;
+    font-family: inherit !important;
+    font-size: 0.74rem !important;
+    font-weight: 800 !important;
+    white-space: nowrap !important;
+    box-shadow: 2px 2px 0 var(--ink) !important;
+  }
+  /* Icons row: right-aligned, sits above the action buttons via order */
+  .card-icon-group { order: -1; justify-content: flex-end; gap: 0.1rem; margin-left: 0 !important; width: 100%; }
 }
 
 /* â”€â”€ 480px: small phones landscape / larger phones â”€â”€ */

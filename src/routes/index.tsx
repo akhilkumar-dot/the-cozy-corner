@@ -1596,20 +1596,24 @@ function Index() {
               </div>
               <div className="card-footer-actions">
                 <div className="card-actions-row">
-                  <button
-                    type="button"
-                    onClick={() => book.status === "Completed" ? toggleStatus(book.id) : handleCompleteBook(book.id)}
-                    className={`card-action-pill ${book.status === "Completed" ? "is-complete" : ""}`}
-                    title={book.status === "Completed" ? "Completed ✓ (click to revert)" : "Mark as Completed"}
-                  >
-                    <Check size={14} />
-                  </button>
-                  {book.hasPdf && (
-                    <button type="button" className="card-action-pill is-pdf" onClick={() => openPdf(book.id)} title="Read PDF">
-                      <FileText size={14} />
+                  <div className="card-primary-actions">
+                    <button
+                      type="button"
+                      onClick={() => book.status === "Completed" ? toggleStatus(book.id) : handleCompleteBook(book.id)}
+                      className={`card-action-pill card-complete-btn ${book.status === "Completed" ? "is-complete" : ""}`}
+                      title={book.status === "Completed" ? "Completed ✓ (click to revert)" : "Mark as Completed"}
+                    >
+                      <Check size={14} />
+                      <span className="card-btn-text">{book.status === "Completed" ? "Completed" : "Mark Completed"}</span>
                     </button>
-                  )}
-                  <div className="card-icon-group" style={{marginLeft: 'auto'}}>
+                    {book.hasPdf && (
+                      <button type="button" className="card-action-pill card-pdf-btn is-pdf" onClick={() => openPdf(book.id)} title="Read PDF">
+                        <FileText size={14} />
+                        <span className="card-btn-text">Read PDF</span>
+                      </button>
+                    )}
+                  </div>
+                  <div className="card-icon-group">
                     <Button
                       variant="ghost" size="icon"
                       onClick={() => toggleUpNext(book.id)}
