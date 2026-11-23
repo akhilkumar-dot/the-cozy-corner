@@ -232,8 +232,8 @@ function HomePage() {
             </div>
           </div>
 
-          {/* Bottom Grid: Up Next + Wishlist CTA */}
-          <div className="hero-bottom-grid">
+          {/* Up Next Queue */}
+          <div className="w-full">
             <div className="hero-card hcard-queue">
               <div className="hcard-queue-header">
                 <span className="hcard-queue-title">Up next</span>
@@ -279,22 +279,6 @@ function HomePage() {
                 </div>
               )}
             </div>
-
-            <Button
-              type="button"
-              variant="ghost"
-              className="hero-card hcard-wishlist"
-              onClick={() => setModalOpen(true)}
-            >
-              <span className="hcard-wishlist-icon-badge">
-                <BookHeart size={22} />
-              </span>
-              <span className="hcard-wishlist-copy">
-                <strong>Find your next favorite</strong>
-                <small>Add a book to your nook</small>
-              </span>
-              <ArrowRight size={20} className="hcard-wishlist-arrow" />
-            </Button>
           </div>
         </div>
       </section>
