@@ -52,11 +52,11 @@ function HomePage() {
   } = useBooks();
 
   return (
-    <main className="min-h-screen bg-violet text-ink flex flex-col justify-between selection:bg-yellow selection:text-ink">
+    <main className="min-h-screen bg-violet text-ink flex flex-col selection:bg-yellow selection:text-ink">
       <SiteHeader activePage="home" />
 
       {/* Hero Dashboard — matches the uploaded home design */}
-      <section id="top" className="hero-section flex-1 flex flex-col justify-center">
+      <section id="top" className="hero-section flex-1 flex flex-col justify-center pb-12">
         <div className="hero-inner">
           <div className="hero-stage">
             <div className="hero-copy">
@@ -298,38 +298,6 @@ function HomePage() {
           </div>
         </div>
       </section>
-
-      {/* Bookish wisdom & cozy footer */}
-      <section id="quote" className="quote-section">
-        <span className="giant-quote">"</span>
-        <div>
-          <p>A room without books is like a body without a soul.</p>
-          <span>— Marcus Tullius Cicero</span>
-        </div>
-        <svg viewBox="0 0 170 170" aria-hidden="true">
-          <circle className="fill-yellow stroke-ink" cx="85" cy="86" r="59" strokeWidth="3" />
-          <path className="fill-coral stroke-ink" strokeWidth="3" d="M47 115V53h61v62l-30-17Z" />
-          <path
-            className="stroke-ink"
-            strokeWidth="4"
-            strokeLinecap="round"
-            d="M129 28l9-13m10 32 15-4m-31 7 9 9"
-          />
-        </svg>
-      </section>
-
-      <footer>
-        <Link to="/" className="logo-mark">
-          <span className="logo-icon-box">
-            <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
-          </span>
-          The Book Nook.
-        </Link>
-        <p>Made for slow mornings, late nights, and very full shelves.</p>
-        <Link to="/shelf" className="font-bold underline hover:text-coral transition-colors">
-          Go to my shelf →
-        </Link>
-      </footer>
     </main>
   );
 }

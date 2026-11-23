@@ -24,7 +24,7 @@ export function SiteHeader({ activePage = "home" }: { activePage?: "home" | "she
         >
           My shelf
         </Link>
-        <a href="#quote">Bookish wisdom</a>
+        <a href={activePage === "shelf" ? "#quote" : "/shelf#quote"}>Bookish wisdom</a>
         {isSupabaseConfigured && (
           <button
             type="button"
