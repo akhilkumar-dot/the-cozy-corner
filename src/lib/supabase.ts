@@ -5,9 +5,7 @@ const supabaseAnonKey = import.meta.env["VITE_SUPABASE_ANON_KEY"] as string | un
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
-export const supabase = isSupabaseConfigured
-  ? createClient(supabaseUrl!, supabaseAnonKey!)
-  : null;
+export const supabase = isSupabaseConfigured ? createClient(supabaseUrl!, supabaseAnonKey!) : null;
 
 export type DbUserPrefs = {
   id: string;
@@ -30,11 +28,16 @@ export async function fetchUserPrefs(): Promise<DbUserPrefs | null> {
   return data as DbUserPrefs | null;
 }
 
-export async function saveUserPrefs(prefs: Pick<DbUserPrefs, "current_read_id" | "up_next_ids">): Promise<boolean> {
+export async function saveUserPrefs(
+  prefs: Pick<DbUserPrefs, "current_read_id" | "up_next_ids">,
+): Promise<boolean> {
   if (!supabase) return false;
   const { error } = await supabase
     .from("user_prefs")
-    .upsert({ id: "default", ...prefs, updated_at: new Date().toISOString() }, { onConflict: "id" });
+    .upsert(
+      { id: "default", ...prefs, updated_at: new Date().toISOString() },
+      { onConflict: "id" },
+    );
   if (error) {
     console.error("Error saving user prefs:", error);
     return false;
@@ -85,10 +88,7 @@ export async function saveBookToDb(bookRow: DbBookRow): Promise<boolean> {
 
   const merged: DbBookRow = {
     ...bookRow,
-    cover:
-      bookRow.cover && bookRow.cover !== ""
-        ? bookRow.cover
-        : (existing?.cover ?? ""),
+    cover: bookRow.cover && bookRow.cover !== "" ? bookRow.cover : (existing?.cover ?? ""),
     description:
       bookRow.description && bookRow.description !== ""
         ? bookRow.description
@@ -97,15 +97,10 @@ export async function saveBookToDb(bookRow: DbBookRow): Promise<boolean> {
     has_pdf: bookRow.has_pdf || existing?.has_pdf || false,
     pdf_file_name: bookRow.pdf_file_name ?? existing?.pdf_file_name ?? null,
     pdf_file_size: bookRow.pdf_file_size ?? existing?.pdf_file_size ?? null,
-    pdf_storage_path:
-      bookRow.has_pdf
-        ? `${bookRow.id}.pdf`
-        : (existing?.pdf_storage_path ?? null),
+    pdf_storage_path: bookRow.has_pdf ? `${bookRow.id}.pdf` : (existing?.pdf_storage_path ?? null),
   };
 
-  const { error } = await supabase
-    .from("books")
-    .upsert(merged, { onConflict: "id" });
+  const { error } = await supabase.from("books").upsert(merged, { onConflict: "id" });
 
   if (error) {
     console.error("Error saving book to Supabase:", error);
@@ -128,21 +123,14 @@ export async function seedBooksInDb(books: DbBookRow[]): Promise<boolean> {
   if (!supabase) return false;
 
   // Fetch existing covers/descriptions/status so we don't overwrite them with stale local values.
-  const { data: existing } = await supabase
-    .from("books")
-    .select("id, cover, description, status");
-  const existingMap = Object.fromEntries(
-    (existing ?? []).map((r) => [r.id, r])
-  );
+  const { data: existing } = await supabase.from("books").select("id, cover, description, status");
+  const existingMap = Object.fromEntries((existing ?? []).map((r) => [r.id, r]));
 
   const merged = books.map((b) => ({
     ...b,
     // Never downgrade a cloud status with a stale local status
     status: existingMap[b.id]?.status ?? b.status,
-    cover:
-      b.cover && b.cover !== ""
-        ? b.cover
-        : (existingMap[b.id]?.cover ?? ""),
+    cover: b.cover && b.cover !== "" ? b.cover : (existingMap[b.id]?.cover ?? ""),
     description:
       b.description && b.description !== ""
         ? b.description

@@ -1,6 +1,6 @@
 # 📚 The Book Nook
 
-*A quiet corner for your stories.*
+_A quiet corner for your stories._
 
 A cozy, personal reading tracker to keep every maybe, someday, and couldn't-put-it-down read in one happy little place. Track what's on your shelf, mark books as completed, and add new finds — all wrapped in a warm, illustrated, no-login-needed interface.
 

@@ -1,1459 +1,172 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import {
-  ArrowDownAZ,
   ArrowRight,
   Bookmark,
   BookHeart,
   BookOpen,
   Check,
-  ChevronDown,
   ChevronRight,
   FileText,
-  ImagePlus,
   Library,
-  Pencil,
-  Search,
   Sparkles,
-  Trash2,
-  X,
 } from "lucide-react";
-
-import { toast } from "sonner";
-
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { deletePdf, getPdf, loadBooksFromIndexedDb, saveBooksToIndexedDb, savePdf } from "@/lib/pdfStore";
-import { migrateEverythingToSupabase } from "@/lib/migrateToSupabase";
-import {
-  deleteBookFromDb,
-  deletePdfFromStorage,
-  fetchBooksFromDb,
-  fetchUserPrefs,
-  getPdfUrlFromStorage,
-  isSupabaseConfigured,
-  saveBookToDb,
-  saveUserPrefs,
-  seedBooksInDb,
-  supabase,
-  uploadCoverToStorage,
-  uploadPdfToStorage,
-  type DbBookRow,
-} from "@/lib/supabase";
-
-type Status = "TBR" | "Reading" | "Completed";
-type Shelf = "All" | "TBR" | "Completed";
-type SortMode = "recent" | "title" | "author";
-type HeroPickerMode = "current" | "up-next" | null;
-
-type Book = {
-  id: string;
-  title: string;
-  author: string;
-  cover: string;
-  description: string;
-  status: Status;
-  addedAt: number;
-  loading?: boolean | undefined;
-  hasPdf?: boolean | undefined;
-  pdfFileName?: string | null | undefined;
-  pdfFileSize?: number | null | undefined;
-  genre?: string | undefined;
-};
-
-function cleanDescription(desc?: string | null): string {
-  if (!desc) return "";
-  if (desc.includes("A story waiting for its turn on the shelf")) return "";
-  return desc.trim();
-}
-
-function rowToBook(row: DbBookRow): Book {
-  return {
-    id: row.id,
-    title: row.title,
-    author: row.author,
-    cover: row.cover || "",
-    description: cleanDescription(row.description),
-    status: row.status,
-    genre: row.genre || "Fiction",
-    addedAt: Number(row.added_at),
-    hasPdf: Boolean(row.has_pdf),
-    pdfFileName: row.pdf_file_name,
-    pdfFileSize: row.pdf_file_size,
-  };
-}
-
-function bookToRow(book: Book): DbBookRow {
-  return {
-    id: book.id,
-    title: book.title,
-    author: book.author,
-    cover: book.cover || "",
-    description: book.description || "",
-    status: book.status,
-    genre: book.genre || "Fiction",
-    added_at: book.addedAt,
-    has_pdf: Boolean(book.hasPdf),
-    pdf_file_name: book.pdfFileName || null,
-    pdf_file_size: book.pdfFileSize || null,
-    pdf_storage_path: book.hasPdf ? `${book.id}.pdf` : null,
-  };
-}
-
-
-const GENRE_OPTIONS = [
-  "Fiction",
-  "Romance",
-  "Mystery & Thriller",
-  "Sci-Fi & Fantasy",
-  "Classics",
-  "Cozy Fiction",
-  "Historical Fiction",
-  "Literary Fiction",
-  "Memoir & Biography",
-  "Young Adult",
-  "Self-Help",
-  "Non-Fiction",
-  "Other",
-] as const;
-
-const seedGenreMap: Record<string, string> = {
-  "Atmosphere: A Love Story": "Romance",
-  "Fake Skating": "Young Adult",
-  "Heart the Lover": "Fiction",
-  "In Your Dreams": "Romance",
-  "Intermezzo": "Literary Fiction",
-  "Normal People": "Literary Fiction",
-  "Queen of Shadows": "Sci-Fi & Fantasy",
-  "Strangers: A Memoir of Marriage": "Memoir & Biography",
-  "The Correspondent": "Historical Fiction",
-  "The Mating Game": "Romance",
-  "The Only One Left": "Mystery & Thriller",
-  "Tomorrow, and Tomorrow, and Tomorrow": "Fiction",
-  "Where the Crawdads Sing": "Mystery & Thriller",
-  "Yesteryear": "Sci-Fi & Fantasy",
-  "Days at the Morisaki Bookshop": "Cozy Fiction",
-  "Wish I Could Tell You": "Romance",
-  "Fool Me Twice": "Romance",
-  "The Match": "Romance",
-  "400 Days": "Mystery & Thriller",
-  "A Man Called Ove": "Fiction",
-  "The Silent Patient": "Mystery & Thriller",
-  "The Lion Women of Tehran": "Historical Fiction",
-  "A Touch of Eternity": "Romance",
-  "Animal Farm": "Classics",
-  "On the Open Road": "Self-Help",
-  "Days at the Torunka Café": "Cozy Fiction",
-};
-
-const seedPairs = [
-  ["Atmosphere: A Love Story", "Taylor Jenkins Reid"],
-  ["Fake Skating", "Lynn Painter"],
-  ["Heart the Lover", "Lily King"],
-  ["In Your Dreams", "Sarah Adams"],
-  ["Intermezzo", "Sally Rooney"],
-  ["Normal People", "Sally Rooney"],
-  ["Queen of Shadows", "Sarah J. Maas"],
-  ["Strangers: A Memoir of Marriage", "Belle Burden"],
-  ["The Correspondent", "Virginia Evans"],
-  ["The Mating Game", "Lana Ferguson"],
-  ["The Only One Left", "Riley Sager"],
-  ["Tomorrow, and Tomorrow, and Tomorrow", "Gabrielle Zevin"],
-  ["Where the Crawdads Sing", "Delia Owens"],
-  ["Yesteryear", "RWW Greene"],
-  ["Days at the Morisaki Bookshop", "Satoshi Yagisawa"],
-  ["Wish I Could Tell You", "Durjoy Datta"],
-  ["Fool Me Twice", "Nona Uppal"],
-  ["The Match", "Sarah Adams"],
-  ["400 Days", "Chetan Bhagat"],
-  ["A Man Called Ove", "Fredrik Backman"],
-  ["The Silent Patient", "Alex Michaelides"],
-  ["The Lion Women of Tehran", "Marjan Kamali"],
-  ["A Touch of Eternity", "Durjoy Datta"],
-  ["Animal Farm", "George Orwell"],
-  ["On the Open Road", "Stuti Changle"],
-  ["Days at the Torunka Café", "Satoshi Yagisawa"],
-] as const;
-
-const defaultDescription = "";
-
-const seededBooks: Book[] = seedPairs.map(([title, author], index) => ({
-  id: `seed-${index + 1}`,
-  title,
-  author,
-  cover: "",
-  description: "",
-  status: "TBR",
-  addedAt: Date.now() - index,
-  loading: true,
-  hasPdf: false,
-  pdfFileName: null,
-  pdfFileSize: null,
-  genre: seedGenreMap[title] || "Fiction",
-}));
-
-const BOOKS_KEY = "book-nook-books-v1";
-const META_KEY = "book-nook-meta-v1";
-const PDF_SIZE_WARN = 10 * 1024 * 1024; // 10 MB
-
-type BookMeta = { cover: string; description: string; genre?: string | undefined };
-
-function safeSaveToLocalStorage(key: string, value: string): void {
-  try {
-    localStorage.setItem(key, value);
-  } catch (err) {
-    console.warn(`localStorage quota exceeded for "${key}". Recovering space...`, err);
-    try {
-      // 1. Clear non-essential metadata search cache
-      localStorage.removeItem(META_KEY);
-
-      // 2. If it's the books key, strip any inline bulky data: URLs from covers
-      // Full covers remain safely in memory, IndexedDB, and Supabase!
-      if (key === BOOKS_KEY) {
-        const parsed = JSON.parse(value) as Book[];
-        const lightweight = parsed.map((b) => ({
-          ...b,
-          cover: b.cover?.startsWith("data:") ? "" : b.cover,
-        }));
-        localStorage.setItem(key, JSON.stringify(lightweight));
-      } else {
-        localStorage.setItem(key, value);
-      }
-    } catch {
-      // Never throw — in-memory state & IndexedDB / Supabase preserve user data!
-    }
-  }
-}
-
-function compressImageFile(file: File): Promise<string> {
-  return new Promise((resolve) => {
-    if (!file || !file.type.startsWith("image/")) {
-      resolve("");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const MAX_WIDTH = 480;
-        const MAX_HEIGHT = 720;
-        let { width, height } = img;
-        if (width > MAX_WIDTH || height > MAX_HEIGHT) {
-          const ratio = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
-        }
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          // Compress to JPEG 0.8: reduces size from 3MB down to ~25KB (100x smaller!)
-          resolve(canvas.toDataURL("image/jpeg", 0.8));
-          return;
-        }
-        resolve(typeof e.target?.result === "string" ? e.target.result : "");
-      };
-      img.onerror = () => resolve(typeof e.target?.result === "string" ? e.target.result : "");
-      img.src = typeof e.target?.result === "string" ? e.target.result : "";
-    };
-    reader.onerror = () => resolve("");
-    reader.readAsDataURL(file);
-  });
-}
-
-function readCache(): Record<string, BookMeta> {
-  try {
-    return JSON.parse(localStorage.getItem(META_KEY) ?? "{}");
-  } catch {
-    return {};
-  }
-}
-
-let googleRateLimitedUntil = 0;
-
-async function fetchBookMeta(title: string, author: string): Promise<BookMeta> {
-  const key = `${title}|${author}`.toLowerCase();
-  const cache = readCache();
-  if (cache[key]) return cache[key];
-
-  let result: BookMeta = { cover: "", description: defaultDescription };
-  try {
-    const isGoogleBlocked = Date.now() < googleRateLimitedUntil;
-    if (!isGoogleBlocked) {
-      const query = encodeURIComponent(`intitle:${title} inauthor:${author}`);
-      const google = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=1`);
-      if (google.status === 429) {
-        // Back off Google Books API for 60 seconds to avoid repeating 429 errors
-        googleRateLimitedUntil = Date.now() + 60_000;
-      } else if (google.ok) {
-        const data = await google.json();
-        const info = data.items?.[0]?.volumeInfo;
-        const thumb = info?.imageLinks?.thumbnail as string | undefined;
-        const category = info?.categories?.[0];
-        let genreCandidate: string | undefined;
-        if (category) {
-          const parts = category.split("/").map((s: string) => s.trim());
-          genreCandidate = parts[parts.length - 1] || parts[0];
-        }
-        result = {
-          cover: thumb ? thumb.replace("http://", "https://").replace("zoom=1", "zoom=2") : "",
-          description: info?.description || defaultDescription,
-          genre: genreCandidate,
-        };
-      }
-    }
-
-    // Fallback to OpenLibrary if Google Books was blocked (429) or lacked cover
-    if (!result.cover) {
-      const openLibrary = await fetch(
-        `https://openlibrary.org/search.json?title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}&limit=1`,
-      );
-      if (openLibrary.ok) {
-        const data = await openLibrary.json();
-        const doc = data.docs?.[0];
-        if (doc?.cover_i) result.cover = `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`;
-      }
-    }
-  } catch {
-    // The illustrated fallback remains available when a public catalog is offline.
-  }
-
-  try {
-    localStorage.setItem(META_KEY, JSON.stringify({ ...cache, [key]: result }));
-  } catch {
-    // Cache write failure ignored if quota full
-  }
-  return result;
-}
-
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+import { SiteHeader } from "@/components/SiteHeader";
+import { BookPlaceholder, cleanDescription } from "@/components/ReaderArt";
+import { useBooks } from "@/context/BooksContext";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "The Book Nook — Personal Reading Tracker" },
-      { name: "description", content: "A playful personal dashboard for tracking books to read and books completed." },
+      {
+        name: "description",
+        content: "A playful personal dashboard for tracking books to read and books completed.",
+      },
       { property: "og:title", content: "The Book Nook — Personal Reading Tracker" },
-      { property: "og:description", content: "Keep your next great reads together in one bright, cozy corner." },
+      {
+        property: "og:description",
+        content: "Keep your next great reads together in one bright, cozy corner.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: Index,
+  component: HomePage,
 });
 
-function ReaderIllustration({ side }: { side: "left" | "right" }) {
-  return (
-    <svg viewBox="0 0 260 300" aria-hidden="true" className={`reader-art reader-art-${side}`}>
-      <path className="fill-cloud" d="M20 262c-12-39 8-76 39-89 4-51 42-90 91-90 50 0 91 43 91 96 20 16 27 47 13 83H20Z" />
-      <circle className="fill-skin" cx={side === "left" ? 126 : 134} cy="85" r="35" />
-      <path className="fill-ink" d={side === "left" ? "M94 85c3-48 66-58 75-5-16-2-29-10-36-24-5 20-19 29-39 29Z" : "M99 86c0-52 68-58 75-4-17 1-33-9-39-25-5 19-17 28-36 29Z"} />
-      <path className={side === "left" ? "fill-mint" : "fill-coral"} d="M65 260c3-77 22-127 65-127 48 0 70 47 72 127H65Z" />
-      <path className="fill-skin" d={side === "left" ? "M92 151c17 15 28 32 34 52l-20 8c-12-19-24-35-36-44Z" : "M170 150c-18 14-30 33-36 54l21 8c11-20 23-36 36-45Z"} />
-      <path className="fill-book" d={side === "left" ? "M112 172l69-13 10 70-70 12Z" : "M70 160l76 13-11 68-74-14Z"} />
-      <path className="stroke-ink" d={side === "left" ? "M151 168l8 65" : "M108 168l-10 64"} fill="none" strokeWidth="3" />
-      <circle className="fill-ink" cx={side === "left" ? 140 : 122} cy="87" r="3" />
-      <path className="stroke-ink" d={side === "left" ? "M139 101q10 7 18-1" : "M103 101q10 7 18-1"} fill="none" strokeWidth="3" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function BookPlaceholder({ title, tone = 0 }: { title: string; tone?: number }) {
-  const tones = ["bg-sky", "bg-yellow", "bg-mint", "bg-lavender", "bg-coral-soft"];
-  return (
-    <div className={`book-placeholder ${tones[tone % tones.length]}`}>
-      <svg viewBox="0 0 140 110" aria-hidden="true" className="w-4/5 max-w-36">
-        <path className="fill-cream stroke-ink" strokeWidth="3" d="M19 72l52 14 51-14v25L71 108 19 96Z" />
-        <path className="fill-coral stroke-ink" strokeWidth="3" d="M24 48l47 13 43-15v27L71 87 24 74Z" />
-        <path className="fill-yellow stroke-ink" strokeWidth="3" d="M32 25l41 13 35-13v23L72 61 32 49Z" />
-        <path className="fill-ink" d="M65 12h15v28H65z" />
-        <path className="fill-coral" d="M80 12l12 8-12 8Z" />
-      </svg>
-      <span>{title}</span>
-    </div>
-  );
-}
-
-// ─── PDF Uploader sub-component ────────────────────────────────────────────────
-type PdfState = {
-  file: File | null;       // newly selected file (pending save)
-  /** existing PDF info pre-loaded from IndexedDB (edit mode) */
-  existingName: string | null;
-  existingSize: number | null;
-  removed: boolean;        // user explicitly cleared an existing PDF
-};
-
-function PdfUploader({
-  pdfState,
-  onChange,
-}: {
-  pdfState: PdfState;
-  onChange: (next: PdfState) => void;
-}) {
-  const [dragging, setDragging] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const accept = (file: File | undefined) => {
-    setError(null);
-    if (!file) return;
-    if (file.type !== "application/pdf") {
-      setError("Only PDF files are accepted. Please choose a .pdf file.");
-      return;
-    }
-    onChange({ file, existingName: null, existingSize: null, removed: false });
-  };
-
-  // Current display info
-  const displayName = pdfState.file?.name ?? (!pdfState.removed ? pdfState.existingName : null);
-  const displaySize = pdfState.file?.size ?? (!pdfState.removed ? pdfState.existingSize : null);
-  const hasFile = !!displayName;
-  const isLarge = displaySize != null && displaySize > PDF_SIZE_WARN;
-
-  const clear = () => {
-    setError(null);
-    if (inputRef.current) inputRef.current.value = "";
-    onChange({ file: null, existingName: pdfState.existingName, existingSize: pdfState.existingSize, removed: true });
-  };
+function HomePage() {
+  const {
+    books,
+    completed,
+    reading,
+    tbr,
+    currentBook,
+    displayedUpNext,
+    setHeroPickerMode,
+    setModalOpen,
+    setEditingBook,
+    handleCompleteBook,
+    openPdf,
+    celebrating,
+  } = useBooks();
 
   return (
-    <div className="pdf-uploader-wrap">
-      {!hasFile ? (
-        <button
-          type="button"
-          className={`pdf-upload-zone${dragging ? " is-dragging" : ""}`}
-          onClick={() => inputRef.current?.click()}
-          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(e) => { e.preventDefault(); setDragging(false); accept(e.dataTransfer.files[0]); }}
-          aria-label="Attach PDF"
-        >
-          <FileText aria-hidden="true" />
-          <strong>Attach PDF (optional)</strong>
-          <span>Drop a .pdf here or click to browse</span>
-        </button>
-      ) : (
-        <div className="pdf-file-info">
-          <FileText aria-hidden="true" />
-          <span className="pdf-file-name">{displayName}</span>
-          {displaySize != null && <span className="pdf-file-size">{formatBytes(displaySize)}</span>}
-          <button type="button" className="pdf-clear-btn" onClick={clear} aria-label="Remove PDF attachment">
-            <X />
-          </button>
-        </div>
-      )}
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".pdf,application/pdf"
-        className="sr-only"
-        onChange={(e) => accept(e.target.files?.[0])}
-      />
-      {error && <p className="pdf-error" role="alert">{error}</p>}
-      {isLarge && !error && (
-        <p className="pdf-warning">⚠ Large PDFs may slow things down — under 10 MB works best.</p>
-      )}
-    </div>
-  );
-}
-
-// ─── Unified BookModal (add + edit) ───────────────────────────────────────────
-type BookModalProps = {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  onAdd?: (book: Book, pdfFile?: File | null) => void;
-  onSave?: (book: Book, pdfFile?: File | null, pdfRemoved?: boolean) => void;
-  editBook?: Book | null;
-};
-
-
-function BookModal({ open, onOpenChange, onAdd, onSave, editBook }: BookModalProps) {
-  const isEdit = !!editBook;
-
-  const [cover, setCover] = useState("");
-  const [dragging, setDragging] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [pdfState, setPdfState] = useState<PdfState>({
-    file: null,
-    existingName: null,
-    existingSize: null,
-    removed: false,
-  });
-
-  // Pre-fill when opening in edit mode
-  useEffect(() => {
-    if (!open) return;
-    if (isEdit && editBook) {
-      setCover(editBook.cover ?? "");
-      // Load existing PDF info if any
-      setPdfState({
-        file: null,
-        existingName: editBook.pdfFileName ?? null,
-        existingSize: editBook.pdfFileSize ?? null,
-        removed: false,
-      });
-    } else {
-      setCover("");
-      setPdfState({ file: null, existingName: null, existingSize: null, removed: false });
-    }
-  }, [open, isEdit, editBook]);
-
-  const readImageFile = async (file?: File) => {
-    if (!file || !file.type.startsWith("image/")) return;
-    try {
-      const compressed = await compressImageFile(file);
-      if (compressed) setCover(compressed);
-    } catch {
-      // Fallback
-      const reader = new FileReader();
-      reader.onload = () => setCover(typeof reader.result === "string" ? reader.result : "");
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const form = event.currentTarget; // Capture form element synchronously before any await
-    const data = new FormData(form);
-    const title = String(data.get("title") ?? "").trim();
-    const author = String(data.get("author") ?? "").trim();
-    if (!title || !author) return;
-
-    const id = isEdit && editBook ? editBook.id : crypto.randomUUID();
-
-    // Handle PDF storage
-    let hasPdf = false;
-    let pdfFileName: string | null = null;
-    let pdfFileSize: number | null = null;
-
-    if (pdfState.file) {
-      // New file selected — save to IndexedDB
-      await savePdf(id, pdfState.file);
-      hasPdf = true;
-      pdfFileName = pdfState.file.name;
-      pdfFileSize = pdfState.file.size;
-    } else if (pdfState.removed) {
-      // User explicitly removed existing PDF
-      await deletePdf(id);
-      hasPdf = false;
-      pdfFileName = null;
-      pdfFileSize = null;
-    } else if (isEdit && editBook?.hasPdf && !pdfState.removed) {
-      // Keep existing PDF untouched
-      hasPdf = true;
-      pdfFileName = editBook.pdfFileName ?? null;
-      pdfFileSize = editBook.pdfFileSize ?? null;
-    }
-
-    const genre = String(data.get("genre") ?? "Fiction").trim() || "Fiction";
-
-    const book: Book = {
-      id,
-      title,
-      author,
-      description: String(data.get("description") ?? "").trim() || defaultDescription,
-      status: data.get("status") === "Completed" ? "Completed" : "TBR",
-      cover,
-      addedAt: isEdit && editBook ? editBook.addedAt : Date.now(),
-      loading: !cover && !isEdit,
-      hasPdf,
-      pdfFileName,
-      pdfFileSize,
-      genre,
-    };
-
-    if (isEdit) {
-      onSave?.(book, pdfState.file, pdfState.removed);
-    } else {
-      onAdd?.(book, pdfState.file);
-    }
-
-    form?.reset();
-    setCover("");
-    setPdfState({ file: null, existingName: null, existingSize: null, removed: false });
-    onOpenChange(false);
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto border-2 border-ink bg-cream shadow-playful sm:max-w-xl sm:rounded-sm">
-        <DialogHeader>
-          <DialogTitle className="font-display text-3xl">
-            {isEdit ? "Edit this adventure" : "Add a new adventure"}
-          </DialogTitle>
-          <DialogDescription>
-            {isEdit
-              ? "Update the details below. Your changes save in place."
-              : "Pop in the details now. We'll look for a cover if you don't add one."}
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={submit} className="space-y-4">
-          {/* Cover image uploader */}
-          <button
-            type="button"
-            className={`upload-zone ${dragging ? "is-dragging" : ""}`}
-            onClick={() => fileRef.current?.click()}
-            onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={(event) => { event.preventDefault(); setDragging(false); readImageFile(event.dataTransfer.files[0]); }}
-          >
-            {cover ? <img src={cover} alt="Book cover preview" /> : <><ImagePlus /><strong>Drop a cover here</strong><span>or click to browse</span></>}
-          </button>
-          <input ref={fileRef} type="file" accept="image/*" className="sr-only" onChange={(e) => readImageFile(e.target.files?.[0])} />
-
-          {/* PDF uploader */}
-          <PdfUploader pdfState={pdfState} onChange={setPdfState} />
-
-          <label className="field-label">Title
-            <Input
-              aria-label="Book title"
-              name="title"
-              required
-              placeholder="The book title"
-              defaultValue={isEdit ? editBook?.title : undefined}
-              key={`title-${editBook?.id ?? "new"}-${open ? "open" : "closed"}`}
-            />
-          </label>
-          <label className="field-label">Author
-            <Input
-              aria-label="Book author"
-              name="author"
-              required
-              placeholder="Who wrote it?"
-              defaultValue={isEdit ? editBook?.author : undefined}
-              key={`author-${editBook?.id ?? "new"}-${open ? "open" : "closed"}`}
-            />
-          </label>
-          <label className="field-label">A tiny note
-            <Textarea
-              name="description"
-              rows={3}
-              placeholder="What caught your eye?"
-              defaultValue={isEdit && editBook?.description !== defaultDescription ? editBook?.description : undefined}
-              key={`desc-${editBook?.id ?? "new"}-${open ? "open" : "closed"}`}
-            />
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="field-label">Shelf
-              <select
-                name="status"
-                className="form-select"
-                defaultValue={isEdit ? editBook?.status : "TBR"}
-                key={`status-${editBook?.id ?? "new"}-${open ? "open" : "closed"}`}
-              >
-                <option value="TBR">To Be Read</option>
-                <option value="Reading">Currently Reading</option>
-                <option value="Completed">Completed</option>
-              </select>
-            </label>
-            <label className="field-label">Genre
-              <select
-                name="genre"
-                className="form-select"
-                defaultValue={isEdit ? (editBook?.genre ?? "Fiction") : "Fiction"}
-                key={`genre-${editBook?.id ?? "new"}-${open ? "open" : "closed"}`}
-              >
-                {GENRE_OPTIONS.map((g) => (
-                  <option key={g} value={g}>{g}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <Button
-            type="submit"
-            className="h-12 w-full rounded-full border-2 border-ink bg-coral font-display text-base text-ink shadow-button hover:bg-coral/90"
-          >
-            {isEdit ? <>Save Changes <Check /></> : <>Add to my nook <BookHeart /></>}
-          </Button>
-        </form>
-      </DialogContent>
-    </Dialog>
-
-  );
-}
-
-function Index() {
-  const [books, setBooks] = useState<Book[]>(seededBooks);
-  const [hydrated, setHydrated] = useState(false);
-  const [shelf, setShelf] = useState<Shelf>("All");
-  const [selectedGenre, setSelectedGenre] = useState<string>("All");
-  const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<SortMode>("recent");
-  const [modalOpen, setModalOpen] = useState(false);
-  const [celebrating, setCelebrating] = useState<string | null>(null);
-  const [editingBook, setEditingBook] = useState<Book | null>(null);
-  const [bookToDelete, setBookToDelete] = useState<Book | null>(null);
-  const [migrating, setMigrating] = useState(false);
-  const [migrationStatus, setMigrationStatus] = useState<string | null>(null);
-  const [currentReadId, setCurrentReadId] = useState<string | null>(null);
-  const [heroPickerMode, setHeroPickerMode] = useState<HeroPickerMode>(null);
-  const [upNextIds, setUpNextIds] = useState<string[]>([]);
-
-  const prefsLoadedRef = useRef(false);
-  const isRemotePrefsUpdateRef = useRef(false);
-
-  // Persist up-next + current read to localStorage AND Supabase
-  useEffect(() => {
-    // Never overwrite cloud prefs with initial/stale local state before cloud sync finishes
-    if (!prefsLoadedRef.current) return;
-
-    // Skip echo when this state change was received from another device via realtime
-    if (isRemotePrefsUpdateRef.current) {
-      isRemotePrefsUpdateRef.current = false;
-      return;
-    }
-
-    localStorage.setItem("book-nook-up-next-v1", JSON.stringify(upNextIds));
-    if (currentReadId !== null) {
-      localStorage.setItem("book-nook-current-read-v1", currentReadId);
-    } else {
-      localStorage.removeItem("book-nook-current-read-v1");
-    }
-
-    if (isSupabaseConfigured) {
-      void saveUserPrefs({ current_read_id: currentReadId, up_next_ids: upNextIds });
-    }
-  }, [upNextIds, currentReadId]);
-
-  // Guarantee that already completed books are never in upNextIds
-  useEffect(() => {
-    if (!hydrated) return;
-    const completedIds = new Set(books.filter((b) => b.status === "Completed").map((b) => b.id));
-    const hasCompletedInUpNext = upNextIds.some((id) => completedIds.has(id));
-    if (hasCompletedInUpNext) {
-      setUpNextIds((prev) => prev.filter((id) => !completedIds.has(id)));
-    }
-  }, [books, hydrated, upNextIds]);
-
-  const handleMigrate = async () => {
-    if (migrating || !isSupabaseConfigured) return;
-    setMigrating(true);
-    toast.info("Syncing local library to Supabase...", {
-      description: "Uploading covers, PDFs, and book records to cloud storage.",
-    });
-
-    try {
-      const result = await migrateEverythingToSupabase((p) => {
-        if (p.phase === "covers") setMigrationStatus(`Covers ${p.current}/${p.total}`);
-        else if (p.phase === "pdfs") setMigrationStatus(`PDFs ${p.current}/${p.total}`);
-        else if (p.phase === "rows") setMigrationStatus(`Saving ${p.current}/${p.total}`);
-        else if (p.phase === "done") setMigrationStatus(null);
-      });
-
-      const freshRows = await fetchBooksFromDb();
-      if (freshRows && freshRows.length > 0) {
-        const cloudBooks = freshRows.map(rowToBook);
-        setBooks(cloudBooks);
-        safeSaveToLocalStorage(BOOKS_KEY, JSON.stringify(cloudBooks));
-        void saveBooksToIndexedDb(cloudBooks);
-      }
-
-      toast.success("Cloud sync complete!", {
-        description: `Synced ${result.rowsUpserted} books, ${result.coversUploaded} covers, and ${result.pdfsUploaded} PDFs.`,
-      });
-    } catch (err) {
-      toast.error("Sync failed", {
-        description: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      setMigrating(false);
-      setMigrationStatus(null);
-    }
-  };
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function initBooks() {
-      try {
-        setCurrentReadId(localStorage.getItem("book-nook-current-read-v1"));
-        const savedUpNext = JSON.parse(localStorage.getItem("book-nook-up-next-v1") ?? "[]") as unknown;
-        setUpNextIds(Array.isArray(savedUpNext) ? savedUpNext.filter((id): id is string => typeof id === "string") : []);
-      } catch {
-        setCurrentReadId(null);
-        setUpNextIds([]);
-      }
-
-      // 1. Instant load from localStorage & IndexedDB — show books immediately, no flash
-      let localBooks: Book[] = seededBooks;
-      try {
-        const saved = localStorage.getItem(BOOKS_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved) as Book[];
-          localBooks = parsed.map((book) => ({
-            ...book,
-            description: cleanDescription(book.description),
-            genre: book.genre || seedGenreMap[book.title] || "Fiction",
-          }));
-        }
-      } catch {
-        localBooks = seededBooks;
-      }
-
-      // 2. Also check IndexedDB (which has GBs of storage, immune to 5MB localStorage quota)
-      try {
-        const idbBooks = await loadBooksFromIndexedDb<Book>();
-        if (idbBooks && idbBooks.length > 0) {
-          // If IndexedDB has more books or restored covers, prefer IndexedDB
-          if (idbBooks.length >= localBooks.length) {
-            localBooks = idbBooks.map((b) => ({
-              ...b,
-              description: cleanDescription(b.description),
-            }));
-          }
-        }
-      } catch {
-        // Fallback gracefully
-      }
-
-      setBooks(localBooks);
-      setHydrated(true);
-
-      // 3. Merge-first Supabase sync
-      // Strategy: push ALL local books up to Supabase first (upsert = safe for existing rows),
-      // then fetch the full cloud list back. This ensures books added on ANY device or
-      // browser profile before Supabase was connected are never lost.
-      if (isSupabaseConfigured) {
-        try {
-          // Only upsert local books that aren't just the bare seed defaults
-          // (i.e. skip if local is exactly seededBooks with no user additions)
-          const isOnlyDefaults =
-            localBooks.length === seededBooks.length &&
-            localBooks.every((b) => b.id.startsWith("seed-"));
-
-          if (!isOnlyDefaults && localBooks.length > 0) {
-            // Push local books to Supabase (upsert – won't overwrite cloud-only books)
-            await seedBooksInDb(localBooks.map(bookToRow));
-          }
-
-          // Fetch the full merged list from Supabase
-          const [dbRows, dbPrefs] = await Promise.all([fetchBooksFromDb(), fetchUserPrefs()]);
-          if (cancelled) return;
-
-          if (dbRows && dbRows.length > 0) {
-            const cloudBooks = dbRows.map(rowToBook);
-            setBooks(cloudBooks);
-            safeSaveToLocalStorage(BOOKS_KEY, JSON.stringify(cloudBooks.map((b) => ({ ...b, loading: false }))));
-            void saveBooksToIndexedDb(cloudBooks.map((b) => ({ ...b, loading: false })));
-          } else {
-            // Cloud is empty — seed it with local books
-            await seedBooksInDb(localBooks.map(bookToRow));
-          }
-
-          // Apply cloud user prefs (current read + up next) — cloud is source of truth
-          if (dbPrefs) {
-            const allResolvedBooks = (dbRows && dbRows.length > 0) ? dbRows.map(rowToBook) : localBooks;
-            if (dbPrefs.current_read_id) {
-              const currentReadBook = allResolvedBooks.find((b) => b.id === dbPrefs.current_read_id);
-              if (currentReadBook && currentReadBook.status !== "Completed") {
-                setCurrentReadId(dbPrefs.current_read_id);
-                localStorage.setItem("book-nook-current-read-v1", dbPrefs.current_read_id);
-              } else {
-                // If saved current read is already completed, promote the 1st valid non-completed book
-                const firstValid = (dbPrefs.up_next_ids ?? [])
-                  .map((id) => allResolvedBooks.find((b) => b.id === id))
-                  .find((b) => b && b.status !== "Completed");
-                const nextId = firstValid ? firstValid.id : (allResolvedBooks.find((b) => b.status === "Reading")?.id ?? null);
-                setCurrentReadId(nextId);
-                if (nextId) localStorage.setItem("book-nook-current-read-v1", nextId);
-                else localStorage.removeItem("book-nook-current-read-v1");
-              }
-            }
-            if (dbPrefs.up_next_ids && dbPrefs.up_next_ids.length > 0) {
-              const cleanUpNext = dbPrefs.up_next_ids
-                .filter((id) => {
-                  const b = allResolvedBooks.find((bk) => bk.id === id);
-                  return b && b.status !== "Completed";
-                })
-                .slice(0, 3);
-              setUpNextIds(cleanUpNext);
-              localStorage.setItem("book-nook-up-next-v1", JSON.stringify(cleanUpNext));
-            }
-          }
-        } catch (err) {
-          console.error("Supabase sync error:", err);
-          // Gracefully keep showing local books on error
-        } finally {
-          prefsLoadedRef.current = true;
-        }
-      } else {
-        prefsLoadedRef.current = true;
-      }
-    }
-
-    void initBooks();
-
-    // Expose migration globally in browser console
-    if (typeof window !== "undefined") {
-      (window as unknown as { migrateToSupabase: () => void }).migrateToSupabase = () => void handleMigrate();
-      // Auto-trigger full migration on first load if unmigrated local data exists
-      const alreadyMigrated = localStorage.getItem("book-nook-migrated-to-supabase-v1") === "true";
-      if (isSupabaseConfigured && !alreadyMigrated) {
-        void handleMigrate();
-      }
-    }
-    let booksChannel: ReturnType<NonNullable<typeof supabase>["channel"]> | null = null;
-    let prefsChannel: ReturnType<NonNullable<typeof supabase>["channel"]> | null = null;
-    if (isSupabaseConfigured && supabase) {
-      // ── Books realtime ────────────────────────────────────────────────
-      booksChannel = supabase
-        .channel("books-realtime")
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "books" },
-          (payload) => {
-            if (payload.eventType === "INSERT") {
-              const newBook = rowToBook(payload.new as DbBookRow);
-              setBooks((current) => {
-                if (current.some((b) => b.id === newBook.id)) return current;
-                return [newBook, ...current];
-              });
-            } else if (payload.eventType === "UPDATE") {
-              const updatedBook = rowToBook(payload.new as DbBookRow);
-              setBooks((current) =>
-                current.map((b) => {
-                  if (b.id !== updatedBook.id) return b;
-                  // Realtime: preserve the in-memory cover/description if the incoming
-                  // cloud row has an empty value (race condition guard — user's upload
-                  // may not have propagated to Supabase yet when the enrichment write arrives)
-                  return {
-                    ...b,
-                    ...updatedBook,
-                    cover: updatedBook.cover || b.cover,
-                    description: updatedBook.description && updatedBook.description !== defaultDescription
-                      ? updatedBook.description
-                      : b.description || updatedBook.description,
-                  };
-                })
-              );
-            } else if (payload.eventType === "DELETE") {
-              const deletedId = (payload.old as { id?: string })?.id;
-              if (deletedId) {
-                setBooks((current) => current.filter((b) => b.id !== deletedId));
-              }
-            }
-          }
-        )
-        .subscribe();
-
-      // ── User prefs realtime (current read + up-next cross-device sync) ─
-      prefsChannel = supabase
-        .channel("user-prefs-realtime")
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "user_prefs", filter: "id=eq.default" },
-          (payload) => {
-            if (payload.eventType === "UPDATE" || payload.eventType === "INSERT") {
-              const row = payload.new as { current_read_id?: string | null; up_next_ids?: string[] };
-              isRemotePrefsUpdateRef.current = true;
-              // Sync current read to this tab
-              if (row.current_read_id !== undefined) {
-                setCurrentReadId(row.current_read_id ?? null);
-                if (row.current_read_id) {
-                  localStorage.setItem("book-nook-current-read-v1", row.current_read_id);
-                } else {
-                  localStorage.removeItem("book-nook-current-read-v1");
-                }
-              }
-              // Sync up-next list to this tab (cap at 3 defensively)
-              if (Array.isArray(row.up_next_ids)) {
-                const capped = row.up_next_ids.slice(0, 3);
-                setUpNextIds(capped);
-                localStorage.setItem("book-nook-up-next-v1", JSON.stringify(capped));
-              }
-            }
-          }
-        )
-        .subscribe();
-    }
-
-    return () => {
-      cancelled = true;
-      if (supabase) {
-        if (booksChannel) void supabase.removeChannel(booksChannel);
-        if (prefsChannel) void supabase.removeChannel(prefsChannel);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (hydrated) {
-      safeSaveToLocalStorage(BOOKS_KEY, JSON.stringify(books.map((book) => ({ ...book, loading: false }))));
-      void saveBooksToIndexedDb(books.map((book) => ({ ...book, loading: false })));
-    }
-  }, [books, hydrated]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    const pending = books.filter((book) => !book.cover && book.description === defaultDescription).slice(0, 26);
-    if (!pending.length) return;
-    let cancelled = false;
-    const enrich = async () => {
-      for (let i = 0; i < pending.length; i += 3) {
-        const batch = pending.slice(i, i + 3);
-        const results = await Promise.all(batch.map((book) => fetchBookMeta(book.title, book.author)));
-        if (cancelled) return;
-        setBooks((current) => current.map((book) => {
-          const index = batch.findIndex((item) => item.id === book.id);
-          if (index >= 0) {
-            const meta = results[index];
-            if (!meta) return book;
-            // Only apply fetched cover/description if the book STILL lacks one at update time.
-            // This prevents the enrichment loop from overwriting a cover the user just uploaded.
-            const appliedCover = book.cover ? book.cover : (meta.cover || "");
-            const appliedDescription = book.description && book.description !== defaultDescription
-              ? book.description
-              : (meta.description || defaultDescription);
-            const appliedGenre = book.genre && book.genre !== "Fiction" ? book.genre : (meta.genre || book.genre || "Fiction");
-            const updated: Book = { ...book, cover: appliedCover, description: appliedDescription, genre: appliedGenre, loading: false };
-            // Only save to Supabase if we actually enriched something new
-            if ((!book.cover && updated.cover) || (book.description === defaultDescription && updated.description !== defaultDescription)) {
-              if (isSupabaseConfigured) void saveBookToDb(bookToRow(updated));
-            }
-            return updated;
-          }
-          return book;
-        }));
-        // Gentle delay between batches to respect external API rate limits
-        await new Promise((r) => setTimeout(r, 600));
-      }
-    };
-    void enrich();
-    return () => { cancelled = true; };
-    // Metadata enrichment is intentionally started once after hydration.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated]);
-
-  const completed = books.filter((b) => b.status === "Completed").length;
-  const reading  = books.filter((b) => b.status === "Reading").length;
-  const tbr      = books.filter((b) => b.status === "TBR").length;
-  const rhythm   = books.length ? Math.round((completed / books.length) * 100) : 0;
-
-  // Hero dashboard data
-  const currentBook = useMemo(() => {
-    if (currentReadId) {
-      const found = books.find((b) => b.id === currentReadId);
-      if (found && found.status !== "Completed") return found;
-    }
-    const readingBook = books.find((b) => b.status === "Reading");
-    if (readingBook) return readingBook;
-    return null;
-  }, [books, currentReadId]);
-
-  const upNextBooks = useMemo(
-    () =>
-      upNextIds
-        .map((id) => books.find((b) => b.id === id))
-        .filter((b): b is Book => !!b && b.status !== "Completed"),
-    [books, upNextIds]
-  );
-
-  const displayedUpNext = useMemo(() => {
-    const pinned = upNextIds
-      .map((id) => books.find((b) => b.id === id))
-      .filter((b): b is Book => !!b && b.status !== "Completed");
-    if (pinned.length >= 3) return pinned.slice(0, 3);
-    const pinnedIds = new Set(pinned.map((b) => b.id));
-    const currentId = currentBook?.id;
-    const fallbacks = books.filter(
-      (b) => b.id !== currentId && b.status !== "Completed" && !pinnedIds.has(b.id)
-    );
-    return [...pinned, ...fallbacks].slice(0, 3);
-  }, [books, upNextIds, currentBook]);
-
-  const MAX_UP_NEXT = 3;
-
-  const toggleUpNext = (bookId: string) => {
-    const target = books.find((b) => b.id === bookId);
-    if (!target) return;
-
-    if (target.status === "Completed") {
-      toast.error("Already completed!", {
-        description: `"${target.title}" is finished and cannot be added to Up Next.`,
-      });
-      return;
-    }
-
-    setUpNextIds((prev) => {
-      if (prev.includes(bookId)) {
-        toast("Removed from Up Next", { description: target.title });
-        return prev.filter((id) => id !== bookId);
-      }
-      const validPrev = prev.filter((id) => {
-        const b = books.find((bk) => bk.id === id);
-        return b && b.status !== "Completed";
-      });
-      if (validPrev.length >= MAX_UP_NEXT) {
-        toast.error(`Up Next is full (max ${MAX_UP_NEXT})`, { description: "Remove a book from Up Next first." });
-        return prev;
-      }
-      toast("Added to Up Next 📖", { description: target.title });
-      return [...validPrev, bookId];
-    });
-  };
-
-  const chooseCurrentRead = (book: Book) => {
-    setCurrentReadId(book.id);
-    setUpNextIds((prev) => prev.filter((id) => id !== book.id));
-    setBooks((current) => current.map((item) => item.id === book.id ? { ...item, status: "Reading" } : item));
-    if (isSupabaseConfigured) void saveBookToDb(bookToRow({ ...book, status: "Reading" }));
-    setHeroPickerMode(null);
-    toast.success("Current read updated", { description: book.title });
-  };
-
-  const availableGenres = useMemo(() => {
-    const set = new Set<string>();
-    books.forEach((b) => {
-      if (b.genre) set.add(b.genre);
-    });
-    return ["All", ...Array.from(set).sort()];
-  }, [books]);
-
-  const visibleBooks = useMemo(() => {
-    const normalized = query.toLowerCase();
-    return books
-      .filter((book) => shelf === "All" || book.status === shelf)
-      .filter((book) => selectedGenre === "All" || (book.genre ?? "Fiction") === selectedGenre)
-      .filter((book) => `${book.title} ${book.author} ${book.genre ?? ""}`.toLowerCase().includes(normalized))
-      .sort((a, b) => sort === "title" ? a.title.localeCompare(b.title) : sort === "author" ? a.author.localeCompare(b.author) : b.addedAt - a.addedAt);
-  }, [books, shelf, selectedGenre, query, sort]);
-
-  const handleCompleteBook = (id: string) => {
-    const target = books.find((book) => book.id === id);
-    if (!target) return;
-
-    const isCurrent = id === currentReadId || id === currentBook?.id;
-
-    // Determine the next book to promote as Current Read:
-    // 1. The 1st pinned Up Next book that is not this completed book and not already completed
-    let candidateNext = upNextIds
-      .map((pid) => books.find((b) => b.id === pid))
-      .find((b): b is Book => !!b && b.id !== id && b.status !== "Completed");
-
-    // 2. If no pinned Up Next book, check displayedUpNext queue (which has fallbacks)
-    if (!candidateNext && isCurrent) {
-      candidateNext = displayedUpNext.find((b) => b.id !== id && b.status !== "Completed");
-    }
-
-    // 3. Fallback to any remaining TBR book
-    if (!candidateNext && isCurrent) {
-      candidateNext = books.find((b) => b.id !== id && b.status === "TBR");
-    }
-
-    const updatedTarget: Book = { ...target, status: "Completed" };
-
-    setBooks((current) =>
-      current.map((b) => {
-        if (b.id === id) return updatedTarget;
-        if (isCurrent && candidateNext && b.id === candidateNext.id) {
-          return { ...b, status: "Reading" };
-        }
-        return b;
-      })
-    );
-
-    if (isSupabaseConfigured) {
-      void saveBookToDb(bookToRow(updatedTarget));
-      if (isCurrent && candidateNext) {
-        void saveBookToDb(bookToRow({ ...candidateNext, status: "Reading" }));
-      }
-    }
-
-    if (isCurrent) {
-      const nextReadId = candidateNext ? candidateNext.id : null;
-      // Remove candidateNext from upNextIds (it is now current read) and remove completed book if present
-      const newUpNextIds = upNextIds.filter(
-        (pid) => pid !== id && (!candidateNext || pid !== candidateNext.id)
-      );
-      setCurrentReadId(nextReadId);
-      setUpNextIds(newUpNextIds);
-    } else {
-      // If completed book was in upNextIds, remove it
-      setUpNextIds((prev) => prev.filter((pid) => pid !== id));
-    }
-
-    setCelebrating(id);
-    window.setTimeout(() => setCelebrating(null), 900);
-    toast.success("Another story finished! 🎉", {
-      description: isCurrent && candidateNext
-        ? `"${target.title}" completed. Now reading "${candidateNext.title}"!`
-        : `"${target.title}" moved to Completed.`,
-    });
-  };
-
-  const toggleStatus = (id: string) => {
-    const target = books.find((book) => book.id === id);
-    if (!target) return;
-
-    if (target.status === "Reading") {
-      handleCompleteBook(id);
-      return;
-    }
-
-    if (target.status === "TBR") {
-      const updated = { ...target, status: "Reading" as const };
-      setBooks((current) => current.map((book) => (book.id === id ? updated : book)));
-      if (isSupabaseConfigured) void saveBookToDb(bookToRow(updated));
-      setCurrentReadId(id);
-      setUpNextIds((prev) => prev.filter((pid) => pid !== id));
-      toast("Now reading! 📚", { description: target.title });
-      return;
-    }
-
-    // From Completed -> back to TBR
-    const updated = { ...target, status: "TBR" as const };
-    setBooks((current) => current.map((book) => (book.id === id ? updated : book)));
-    if (isSupabaseConfigured) void saveBookToDb(bookToRow(updated));
-    if (currentReadId === id) {
-      setCurrentReadId(null);
-    }
-    toast("Moved back to TBR", { description: target.title });
-  };
-
-  const handleRequestDelete = (book: Book) => {
-    setBookToDelete(book);
-  };
-
-  const confirmDeleteBook = () => {
-    if (!bookToDelete) return;
-    const book = bookToDelete;
-    setBooks((current) => current.filter((item) => item.id !== book.id));
-    if (book.hasPdf) {
-      void deletePdf(book.id);
-      if (isSupabaseConfigured) void deletePdfFromStorage(book.id);
-    }
-    if (isSupabaseConfigured) {
-      void deleteBookFromDb(book.id);
-    }
-    if (currentReadId === book.id) {
-      setCurrentReadId(null);
-    }
-    setUpNextIds((prev) => prev.filter((id) => id !== book.id));
-    toast.success("Book removed", { description: `"${book.title}" was removed from your nook.` });
-    setBookToDelete(null);
-  };
-
-  const addBook = async (book: Book, pdfFile?: File | null) => {
-    setBooks((current) => [book, ...current]);
-    toast.success("Book tucked onto your shelf!", { description: book.title });
-
-    if (pdfFile && isSupabaseConfigured) {
-      void uploadPdfToStorage(book.id, pdfFile);
-    }
-    if (isSupabaseConfigured) {
-      void saveBookToDb(bookToRow(book));
-    }
-
-    if (!book.cover) {
-      void fetchBookMeta(book.title, book.author).then((meta) => {
-        setBooks((current) => current.map((item) => {
-          if (item.id === book.id) {
-            // Guard: only apply fetched cover if the book still has no cover at update time
-            const appliedCover = item.cover ? item.cover : (meta.cover || "");
-            const appliedDescription = item.description && item.description !== defaultDescription
-              ? item.description
-              : (meta.description || defaultDescription);
-            const updated: Book = { ...item, cover: appliedCover, description: appliedDescription, genre: meta.genre || item.genre || "Fiction", loading: false };
-            if (isSupabaseConfigured) void saveBookToDb(bookToRow(updated));
-            return updated;
-          }
-          return item;
-        }));
-      });
-    }
-  };
-
-  const saveBook = async (updated: Book, pdfFile?: File | null, pdfRemoved?: boolean) => {
-    // If the user uploaded a cover (stored as a data: URL), upload it to Supabase Storage
-    // and replace the data URL with the public storage URL so it persists across devices.
-    let bookToSave = updated;
-    if (updated.cover?.startsWith("data:") && isSupabaseConfigured) {
-      try {
-        const res = await fetch(updated.cover);
-        const blob = await res.blob();
-        const storageUrl = await uploadCoverToStorage(updated.id, blob);
-        if (storageUrl) {
-          bookToSave = { ...updated, cover: storageUrl };
-          // Update state immediately with the storage URL so it shows correctly
-          setBooks((current) => current.map((book) => book.id === updated.id ? { ...book, cover: storageUrl } : book));
-        }
-      } catch {
-        // If upload fails, fall back to saving the data URL (it'll still work locally)
-      }
-    }
-
-    const isCurrent = bookToSave.id === currentReadId || bookToSave.id === currentBook?.id;
-    if (isCurrent && bookToSave.status === "Completed") {
-      handleCompleteBook(bookToSave.id);
-      return;
-    }
-
-    setBooks((current) => current.map((book) => book.id === bookToSave.id ? { ...book, ...bookToSave } : book));
-    toast.success("Updated!", { description: `${bookToSave.title} has been saved.` });
-
-    if (pdfFile && isSupabaseConfigured) {
-      void uploadPdfToStorage(bookToSave.id, pdfFile);
-    } else if (pdfRemoved && isSupabaseConfigured) {
-      void deletePdfFromStorage(bookToSave.id);
-    }
-
-    if (isSupabaseConfigured) {
-      void saveBookToDb(bookToRow(bookToSave));
-    }
-
-    if (!updated.cover) {
-      void fetchBookMeta(updated.title, updated.author).then((meta) => {
-        setBooks((current) => current.map((item) => {
-          if (item.id === updated.id) {
-            // Guard: only apply fetched cover if the book still has no cover at update time
-            const appliedCover = item.cover ? item.cover : (meta.cover || "");
-            const appliedDescription = item.description && item.description !== defaultDescription
-              ? item.description
-              : (meta.description || defaultDescription);
-            const withMeta: Book = { ...item, cover: appliedCover, description: appliedDescription, genre: meta.genre || item.genre || "Fiction", loading: false };
-            if (isSupabaseConfigured) void saveBookToDb(bookToRow(withMeta));
-            return withMeta;
-          }
-          return item;
-        }));
-      });
-    }
-  };
-
-  const openPdf = async (bookId: string) => {
-    try {
-      // 1. Check local IndexedDB first (works offline & preserves existing local PDFs)
-      const blob = await getPdf(bookId);
-      if (blob) {
-        const url = URL.createObjectURL(blob);
-        window.open(url, "_blank");
-        window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
-        return;
-      }
-
-      // 2. Fall back to Supabase Storage if opened on another device/profile
-      if (isSupabaseConfigured) {
-        const publicUrl = await getPdfUrlFromStorage(bookId);
-        if (publicUrl) {
-          window.open(publicUrl, "_blank");
-          return;
-        }
-      }
-
-      toast.error("PDF not found", { description: "The file may have been cleared or not uploaded." });
-    } catch {
-      toast.error("Couldn't open PDF", { description: "Something went wrong reading from storage." });
-    }
-  };
-
-
-  const handleEditOpen = (book: Book) => {
-    setEditingBook(book);
-  };
-
-  const handleEditClose = (v: boolean) => {
-    if (!v) setEditingBook(null);
-  };
-
-  return (
-    <main className="min-h-screen overflow-hidden bg-background text-ink">
-      <header className="site-header">
-        <a href="#top" className="logo-mark" aria-label="The Book Nook home">
-          <span className="logo-icon-box">
-            <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
-          </span>
-          The Book Nook.
-        </a>
-        <nav>
-          <a href="#shelves">My shelf</a>
-          <a href="#quote">Bookish wisdom</a>
-          {isSupabaseConfigured && (
-            <button
-              type="button"
-              onClick={() => void handleMigrate()}
-              disabled={migrating}
-              title="Click to sync all local books, custom covers, and PDFs to Supabase cloud"
-              className="inline-flex items-center gap-1.5 text-[0.7rem] font-bold text-ink uppercase bg-mint hover:bg-mint/80 px-2.5 py-1 rounded-full border border-ink shadow-[1px_1px_0_var(--ink)] cursor-pointer transition-all disabled:opacity-75"
-            >
-              <span className={`w-1.5 h-1.5 rounded-full ${migrating ? "bg-coral animate-ping" : "bg-green animate-pulse"}`} />
-              {migrating ? (migrationStatus || "Syncing...") : "Cloud Sync"}
-            </button>
-          )}
-        </nav>
-
-        <Button onClick={() => setModalOpen(true)} className="rounded-full border-2 border-ink bg-yellow px-3 md:px-5 font-display text-ink shadow-button hover:bg-white text-sm md:text-base whitespace-nowrap font-bold">+ Add a Book</Button>
-      </header>
-
-      <section id="top" className="hero-section">
+    <main className="min-h-screen bg-violet text-ink flex flex-col justify-between selection:bg-yellow selection:text-ink">
+      <SiteHeader activePage="home" />
+
+      {/* Hero Dashboard — matches the uploaded home design */}
+      <section id="top" className="hero-section flex-1 flex flex-col justify-center">
         <div className="hero-inner">
           <div className="hero-stage">
             <div className="hero-copy">
-              <div className="eyebrow"><Sparkles size={14} /> Your next favorite is in here</div>
-              <h1 className="hero-title">Dive In to Inspiring<br /><span>Stories & Chapters.</span></h1>
+              <div className="eyebrow">
+                <Sparkles size={14} className="text-yellow" /> YOUR NEXT FAVORITE IS IN HERE
+              </div>
+              <h1 className="hero-title">
+                Dive In to
+                <br />
+                Inspiring
+                <br />
+                <span>Stories &</span>
+                <br />
+                Chapters.
+              </h1>
               <p>Every plot twist, late-night chapter, and someday read—right where you need it.</p>
               <div className="hero-action-row">
-                <Button onClick={() => setModalOpen(true)} className="hero-primary-action">Add a book <BookHeart size={16} /></Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="hero-browse-link"
-                  onClick={() => document.getElementById("shelves")?.scrollIntoView({ behavior: "smooth" })}
-                >
-                  Browse my shelf <ArrowRight size={15} />
+                <Button onClick={() => setModalOpen(true)} className="hero-primary-action">
+                  Add a book <BookHeart size={16} />
                 </Button>
+                <Link to="/shelf" className="hero-browse-link">
+                  BROWSE MY SHELF <ArrowRight size={15} />
+                </Link>
               </div>
             </div>
 
+            {/* Current Read Neo-brutalist Yellow Card */}
             <article className="hero-card hcard-reading relative">
               <div className="hero-soundwave-sticker" aria-hidden="true">
-                <span className="soundwave-bar" style={{ animationDelay: '0s' }} />
-                <span className="soundwave-bar" style={{ animationDelay: '0.2s' }} />
-                <span className="soundwave-bar" style={{ animationDelay: '0.4s' }} />
-                <span className="soundwave-bar" style={{ animationDelay: '0.1s' }} />
-                <span className="soundwave-bar" style={{ animationDelay: '0.3s' }} />
+                <span className="soundwave-bar" style={{ animationDelay: "0s" }} />
+                <span className="soundwave-bar" style={{ animationDelay: "0.2s" }} />
+                <span className="soundwave-bar" style={{ animationDelay: "0.4s" }} />
+                <span className="soundwave-bar" style={{ animationDelay: "0.1s" }} />
+                <span className="soundwave-bar" style={{ animationDelay: "0.3s" }} />
               </div>
               <div className="hcard-topline">
-                <div className="hcard-label"><BookOpen size={14} /> CURRENT READ</div>
-                <Button type="button" variant="ghost" className="hcard-choose" onClick={() => setHeroPickerMode("current")}>Choose book</Button>
+                <div className="hcard-label">
+                  <BookOpen size={14} /> CURRENT READ
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="hcard-choose"
+                  onClick={() => setHeroPickerMode("current")}
+                >
+                  CHOOSE BOOK
+                </Button>
               </div>
+
               {currentBook ? (
                 <div className="hcard-reading-body">
                   <div className="hero-feature-cover">
-                    {currentBook.cover && !currentBook.loading
-                      ? <img src={currentBook.cover} alt={`Cover of ${currentBook.title}`} onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.nextElementSibling?.classList.remove("hidden"); }} />
-                      : null}
-                    <div className={`hero-feature-placeholder${currentBook.cover && !currentBook.loading ? " hidden" : ""}`}><BookPlaceholder title={currentBook.title} /></div>
+                    {currentBook.cover && !currentBook.loading ? (
+                      <img
+                        src={currentBook.cover}
+                        alt={`Cover of ${currentBook.title}`}
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                          e.currentTarget.nextElementSibling?.classList.remove("hidden");
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      className={`hero-feature-placeholder${currentBook.cover && !currentBook.loading ? " hidden" : ""}`}
+                    >
+                      <BookPlaceholder title={currentBook.title} />
+                    </div>
                   </div>
                   <div className="hcard-reading-info">
                     <span className="hero-feature-kicker">ON YOUR NIGHTSTAND</span>
                     <h3>{currentBook.title}</h3>
                     <p className="hcard-author">by {currentBook.author}</p>
                     {cleanDescription(currentBook.description) && (
-                      <blockquote className="hcard-quote">“{cleanDescription(currentBook.description).replace(/<[^>]*>/g, " ").slice(0, 92).trim()}…”</blockquote>
+                      <blockquote className="hcard-quote">
+                        “
+                        {cleanDescription(currentBook.description)
+                          .replace(/<[^>]*>/g, " ")
+                          .slice(0, 92)
+                          .trim()}
+                        …”
+                      </blockquote>
                     )}
                     <div className="hcard-actions-row">
-                      <Button type="button" className="hcard-complete-btn" onClick={() => handleCompleteBook(currentBook.id)} title="Mark this book as completed">
+                      <Button
+                        type="button"
+                        className="hcard-complete-btn"
+                        onClick={() => handleCompleteBook(currentBook.id)}
+                        title="Mark this book as completed"
+                      >
                         <Check size={13} /> Mark completed
                       </Button>
-                      <Button type="button" variant="ghost" className="hcard-update-btn" onClick={() => handleEditOpen(currentBook)}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="hcard-update-btn"
+                        onClick={() => setEditingBook(currentBook)}
+                      >
                         <BookOpen size={13} /> Details
                       </Button>
-                      {currentBook.hasPdf && <Button type="button" variant="ghost" className="pdf-pill" onClick={() => openPdf(currentBook.id)} title="Open PDF"><FileText size={13} /> Read PDF</Button>}
+                      {currentBook.hasPdf && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="pdf-pill"
+                          onClick={() => openPdf(currentBook.id)}
+                          title="Open PDF"
+                        >
+                          <FileText size={13} /> Read PDF
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1461,304 +174,162 @@ function Index() {
                 <div className="hcard-reading-empty">
                   <BookOpen size={32} />
                   <p>What are you reading?</p>
-                  <Button type="button" variant="ghost" className="hero-empty-choose" onClick={() => setHeroPickerMode("current")}>Choose your current read <ArrowRight size={15} /></Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="hero-empty-choose"
+                    onClick={() => setHeroPickerMode("current")}
+                  >
+                    Choose your current read <ArrowRight size={15} />
+                  </Button>
+                </div>
+              )}
+              {celebrating === currentBook?.id && (
+                <div className="confetti" aria-hidden="true">
+                  ✦ <span>♥</span> ★ <b>✦</b> ●
                 </div>
               )}
             </article>
           </div>
 
+          {/* Reading Statistics Magenta Band */}
           <div className="hero-stats-band" aria-label="Reading statistics">
             <div className="hero-stat">
-              <span className="hero-stat-icon-badge" aria-hidden="true"><Library size={18} /></span>
+              <span className="hero-stat-icon-badge" aria-hidden="true">
+                <Library size={18} />
+              </span>
               <div className="hero-stat-text">
                 <strong>{books.length}</strong>
                 <span>Books In Nook</span>
               </div>
             </div>
             <div className="hero-stat">
-              <span className="hero-stat-icon-badge" aria-hidden="true"><Check size={18} /></span>
+              <span className="hero-stat-icon-badge" aria-hidden="true">
+                <Check size={18} />
+              </span>
               <div className="hero-stat-text">
                 <strong>{completed}</strong>
                 <span>Stories Finished</span>
               </div>
             </div>
             <div className="hero-stat">
-              <span className="hero-stat-icon-badge" aria-hidden="true"><Bookmark size={18} /></span>
+              <span className="hero-stat-icon-badge" aria-hidden="true">
+                <Bookmark size={18} />
+              </span>
               <div className="hero-stat-text">
                 <strong>{tbr}</strong>
                 <span>On Your TBR</span>
               </div>
             </div>
             <div className="hero-stat">
-              <span className="hero-stat-icon-badge" aria-hidden="true"><Sparkles size={18} /></span>
+              <span className="hero-stat-icon-badge" aria-hidden="true">
+                <Sparkles size={18} />
+              </span>
               <div className="hero-stat-text">
-                <strong>{reading > 0 ? reading : (currentBook ? 1 : 0)}</strong>
+                <strong>{reading > 0 ? reading : currentBook ? 1 : 0}</strong>
                 <span>Reading Now</span>
               </div>
             </div>
           </div>
 
+          {/* Bottom Grid: Up Next + Wishlist CTA */}
           <div className="hero-bottom-grid">
             <div className="hero-card hcard-queue">
               <div className="hcard-queue-header">
                 <span className="hcard-queue-title">Up next</span>
-                <Button type="button" variant="ghost" className="hcard-queue-viewall" onClick={() => setHeroPickerMode("up-next")}>Choose books</Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="hcard-queue-viewall"
+                  onClick={() => setHeroPickerMode("up-next")}
+                >
+                  CHOOSE BOOKS
+                </Button>
               </div>
-              {displayedUpNext.length > 0 ? displayedUpNext.map((b, i) => {
-                const badgeClass = i === 0 ? "hqueue-badge--yellow" : i === 1 ? "hqueue-badge--mint" : "hqueue-badge--coral";
-                return (
-                  <div key={b.id} className="hcard-queue-item" onClick={() => handleEditOpen(b)} role="button" tabIndex={0}>
-                    <span className={`hqueue-badge ${badgeClass}`}>0{i + 1}</span>
-                    <div className="hqueue-info">
-                      <span className="hqueue-title">{b.title}</span>
-                      {b.author && <span className="hqueue-author">{b.author}</span>}
+              {displayedUpNext.length > 0 ? (
+                displayedUpNext.map((b, i) => {
+                  const badgeClass =
+                    i === 0
+                      ? "hqueue-badge--yellow"
+                      : i === 1
+                        ? "hqueue-badge--mint"
+                        : "hqueue-badge--coral";
+                  return (
+                    <div
+                      key={b.id}
+                      className="hcard-queue-item cursor-pointer"
+                      onClick={() => setEditingBook(b)}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <span className={`hqueue-badge ${badgeClass}`}>0{i + 1}</span>
+                      <div className="hqueue-info">
+                        <span className="hqueue-title">{b.title}</span>
+                        {b.author && <span className="hqueue-author">{b.author}</span>}
+                      </div>
+                      <ChevronRight size={14} className="hqueue-arrow" />
                     </div>
-                    <ChevronRight size={14} className="hqueue-arrow" />
-                  </div>
-                );
-              }) : (
+                  );
+                })
+              ) : (
                 <div className="hqueue-empty-state">
-                  <p>Your next chapter starts here. Choose up to three books for your reading queue.</p>
+                  <p>
+                    Your next chapter starts here. Choose up to three books for your reading queue.
+                  </p>
                 </div>
               )}
             </div>
 
-            <Button type="button" variant="ghost" className="hero-card hcard-wishlist" onClick={() => setModalOpen(true)}>
-              <span className="hcard-wishlist-icon-badge"><BookHeart size={22} /></span>
-              <span className="hcard-wishlist-copy"><strong>Find your next favorite</strong><small>Add a book to your nook</small></span>
+            <Button
+              type="button"
+              variant="ghost"
+              className="hero-card hcard-wishlist"
+              onClick={() => setModalOpen(true)}
+            >
+              <span className="hcard-wishlist-icon-badge">
+                <BookHeart size={22} />
+              </span>
+              <span className="hcard-wishlist-copy">
+                <strong>Find your next favorite</strong>
+                <small>Add a book to your nook</small>
+              </span>
               <ArrowRight size={20} className="hcard-wishlist-arrow" />
             </Button>
           </div>
         </div>
       </section>
 
-      <section id="shelves" className="shelf-section">
-        <div className="section-heading">
-          <div>
-            <span className="eyebrow plain">MY BOOKSHELF</span>
-            <h2>What's on the <em>shelf?</em></h2>
-          </div>
-          <p>
-            {visibleBooks.length} {visibleBooks.length === 1 ? "book" : "books"} in view
-            {selectedGenre !== "All" && ` · ${selectedGenre}`}
-          </p>
+      {/* Bookish wisdom & cozy footer */}
+      <section id="quote" className="quote-section">
+        <span className="giant-quote">"</span>
+        <div>
+          <p>A room without books is like a body without a soul.</p>
+          <span>— Marcus Tullius Cicero</span>
         </div>
-        <div className="shelf-tools">
-          <div className="shelf-tabs" role="tablist" aria-label="Book shelves">
-            {(["All", "TBR", "Completed"] as Shelf[]).map((item) => <Button key={item} variant="ghost" role="tab" aria-selected={shelf === item} onClick={() => setShelf(item)} className={shelf === item ? "active" : ""}>{item === "TBR" ? "To Be Read" : item}</Button>)}
-          </div>
-          <div className="search-sort-row">
-            <label className="search-box"><Search /><span className="sr-only">Search books</span><Input aria-label="Search books" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search title, author, or genre…" />{query && <Button variant="ghost" size="icon" onClick={() => setQuery("")} aria-label="Clear search"><X /></Button>}</label>
-            <label className="sort-box"><ArrowDownAZ /><span className="sr-only">Sort books</span><select aria-label="Sort books" value={sort} onChange={(e) => setSort(e.target.value as SortMode)}><option value="recent">Recently added</option><option value="title">Title A–Z</option><option value="author">Author A–Z</option></select></label>
-          </div>        </div>
-
-        <div className="genre-filter-strip" role="group" aria-label="Filter by genre">
-          <span className="genre-filter-label"><Sparkles className="w-3.5 h-3.5" /> Genre:</span>
-          <div className="genre-pill-list">
-            {availableGenres.map((g) => (
-              <button
-                key={g}
-                type="button"
-                onClick={() => setSelectedGenre(g)}
-                className={`genre-filter-pill ${selectedGenre === g ? "is-active" : ""}`}
-              >
-                {g === "All" ? "All Genres" : g}
-              </button>
-            ))}
-          </div>
-          {selectedGenre !== "All" && (
-            <button
-              type="button"
-              className="genre-clear-btn"
-              onClick={() => setSelectedGenre("All")}
-            >
-              Clear filter <X className="w-3.5 h-3.5 inline" />
-            </button>
-          )}
-        </div>
-
-        {visibleBooks.length ? <div className="book-grid">
-          {visibleBooks.map((book, index) => (
-            <article className="book-card" key={book.id}>
-              <div className="cover-wrap">
-                <span className={`status-badge ${book.status === "Completed" ? "is-complete" : book.status === "Reading" ? "is-reading" : ""}`}>{book.status === "Reading" ? "Reading" : book.status}</span>
-                {book.loading ? <div className="cover-skeleton" /> : book.cover ? <><img src={book.cover} alt={`Cover of ${book.title}`} onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.nextElementSibling?.classList.remove("hidden"); }} /><div className="hidden h-full w-full"><BookPlaceholder title={book.title} tone={index} /></div></> : <div className="h-full w-full"><BookPlaceholder title={book.title} tone={index} /></div>}
-              </div>
-              <div className="book-info">
-                <div className="book-meta-row">
-                  <p className="author">by {book.author}</p>
-                  {book.genre && <span className="genre-tag">{book.genre}</span>}
-                </div>
-                <h3>{book.title}</h3>
-                {cleanDescription(book.description) && (
-                  <p className="description">{cleanDescription(book.description).replace(/<[^>]*>/g, " ")}</p>
-                )}
-              </div>
-              <div className="card-footer-actions">
-                <div className="card-actions-row">
-                  <div className="card-primary-actions">
-                    <button
-                      type="button"
-                      onClick={() => book.status === "Completed" ? toggleStatus(book.id) : handleCompleteBook(book.id)}
-                      className={`card-action-pill card-complete-btn ${book.status === "Completed" ? "is-complete" : ""}`}
-                      title={book.status === "Completed" ? "Completed ✓ (click to revert)" : "Mark as Completed"}
-                    >
-                      <Check size={14} />
-                      <span className="card-btn-text">{book.status === "Completed" ? "Completed" : "Mark Completed"}</span>
-                    </button>
-                    {book.hasPdf && (
-                      <button type="button" className="card-action-pill card-pdf-btn is-pdf" onClick={() => openPdf(book.id)} title="Read PDF">
-                        <FileText size={14} />
-                        <span className="card-btn-text">Read PDF</span>
-                      </button>
-                    )}
-                  </div>
-                  <div className="card-icon-group">
-                    <Button
-                      variant="ghost" size="icon"
-                      onClick={() => toggleUpNext(book.id)}
-                      disabled={book.status === "Completed"}
-                      aria-label={
-                        book.status === "Completed"
-                          ? "Completed book cannot be added to Up Next"
-                          : upNextIds.includes(book.id)
-                          ? "Remove from Up Next"
-                          : "Add to Up Next"
-                      }
-                      title={
-                        book.status === "Completed"
-                          ? "Completed book cannot be added to Up Next"
-                          : upNextIds.includes(book.id)
-                          ? "Remove from Up Next"
-                          : "Add to Up Next"
-                      }
-                      className={`card-icon-btn card-bookmark-btn ${upNextIds.includes(book.id) && book.status !== "Completed" ? "is-pinned" : ""} ${book.status === "Completed" ? "opacity-25 cursor-not-allowed pointer-events-none" : ""}`}
-                    >
-                      <Bookmark size={14} />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleEditOpen(book)} aria-label={`Edit ${book.title}`} title="Edit book" className="card-icon-btn"><Pencil size={14} /></Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleRequestDelete(book)} aria-label={`Remove ${book.title}`} title="Remove book" className="card-icon-btn card-icon-btn--danger"><Trash2 size={14} /></Button>
-                  </div>
-                </div>
-              </div>
-              {celebrating === book.id && <div className="confetti" aria-hidden="true">✦ <span>♥</span> ★ <b>✦</b> ●</div>}
-            </article>
-          ))}
-        </div> : <div className="empty-shelf"><BookOpen /><h3>No stories here yet.</h3><p>{selectedGenre !== "All" ? `No books found under "${selectedGenre}". Try selecting All Genres or adjusting your search.` : "Try another shelf or search, or add a new book."}</p>{selectedGenre !== "All" ? <Button onClick={() => setSelectedGenre("All")} className="hero-button">Show All Genres</Button> : <Button onClick={() => setModalOpen(true)} className="hero-button">+ Add a Book</Button>}</div>}
-
+        <svg viewBox="0 0 170 170" aria-hidden="true">
+          <circle className="fill-yellow stroke-ink" cx="85" cy="86" r="59" strokeWidth="3" />
+          <path className="fill-coral stroke-ink" strokeWidth="3" d="M47 115V53h61v62l-30-17Z" />
+          <path
+            className="stroke-ink"
+            strokeWidth="4"
+            strokeLinecap="round"
+            d="M129 28l9-13m10 32 15-4m-31 7 9 9"
+          />
+        </svg>
       </section>
 
-      <section id="quote" className="quote-section"><span className="giant-quote">"</span><div><p>A room without books is like a body without a soul.</p><span>— Marcus Tullius Cicero</span></div><svg viewBox="0 0 170 170" aria-hidden="true"><circle className="fill-yellow stroke-ink" cx="85" cy="86" r="59" strokeWidth="3" /><path className="fill-coral stroke-ink" strokeWidth="3" d="M47 115V53h61v62l-30-17Z" /><path className="stroke-ink" strokeWidth="4" strokeLinecap="round" d="M129 28l9-13m10 32 15-4m-31 7 9 9" /></svg></section>
-
-      <section className="cta-band">
-        <div className="max-w-xl mx-auto text-center flex flex-col items-center">
-          <span className="eyebrow plain">ONE MORE CHAPTER?</span>
-          <h2>Add your next <em>great read.</em></h2>
-          <Button onClick={() => setModalOpen(true)} className="hero-button">Add a Book <BookHeart /></Button>
-        </div>
-      </section>
       <footer>
-        <a href="#top" className="logo-mark">
+        <Link to="/" className="logo-mark">
           <span className="logo-icon-box">
             <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
           </span>
           The Book Nook.
-        </a>
+        </Link>
         <p>Made for slow mornings, late nights, and very full shelves.</p>
-        <a href="#shelves">Back to my shelf ↑</a>
+        <Link to="/shelf" className="font-bold underline hover:text-coral transition-colors">
+          Go to my shelf →
+        </Link>
       </footer>
-
-
-      {/* Custom in-app confirmation modal for deleting books */}
-      <Dialog open={bookToDelete !== null} onOpenChange={(open) => { if (!open) setBookToDelete(null); }}>
-        <DialogContent className="max-w-md border-2 border-ink bg-card p-6 shadow-playful rounded-xl sm:rounded-xl">
-          <div className="flex items-start gap-3.5">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border-2 border-ink bg-coral/20 text-coral shadow-[2px_2px_0_var(--ink)]">
-              <Trash2 className="h-5 w-5 text-coral" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <DialogTitle className="font-display text-xl font-extrabold text-ink">
-                Remove from your nook?
-              </DialogTitle>
-              <DialogDescription className="mt-1.5 text-sm text-ink/75 leading-relaxed">
-                Are you sure you want to remove <strong className="text-ink font-bold">"{bookToDelete?.title}"</strong>
-                {bookToDelete?.author ? ` by ${bookToDelete.author}` : ""}? This cannot be undone.
-              </DialogDescription>
-            </div>
-          </div>
-
-          <DialogFooter className="mt-5 flex flex-row items-center justify-end gap-2.5 sm:gap-2.5">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setBookToDelete(null)}
-              className="h-10 rounded-lg border-2 border-ink bg-background px-4 font-display font-bold text-ink shadow-[2px_2px_0_var(--ink)] hover:bg-yellow transition-all"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={confirmDeleteBook}
-              className="h-10 rounded-lg border-2 border-ink bg-coral px-4 font-display font-bold text-ink shadow-[2px_2px_0_var(--ink)] hover:bg-red-500 hover:text-white transition-all flex items-center gap-1.5"
-            >
-              <Trash2 size={15} /> Yes, remove
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add book modal */}
-      <BookModal open={modalOpen} onOpenChange={setModalOpen} onAdd={addBook} />
-
-      {/* Edit book modal */}
-      <BookModal
-        open={!!editingBook}
-        onOpenChange={handleEditClose}
-        onSave={saveBook}
-        editBook={editingBook}
-      />
-
-      <Dialog open={heroPickerMode !== null} onOpenChange={(open) => { if (!open) setHeroPickerMode(null); }}>
-        <DialogContent className="hero-picker-dialog max-h-[86vh] overflow-y-auto border-2 border-ink bg-cream shadow-playful sm:max-w-2xl sm:rounded-sm">
-          <DialogHeader>
-            <DialogTitle className="font-display text-3xl">
-              {heroPickerMode === "current" ? "Choose your current read" : "Choose what’s up next"}
-            </DialogTitle>
-            <DialogDescription>
-              {heroPickerMode === "current" ? "Pick one book to feature at the top of your nook." : "Pick up to three books and arrange your immediate reading queue."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="hero-picker-list">
-            {books.filter((b) => b.status !== "Completed").length === 0 ? (
-              <p className="p-6 text-center text-sm text-ink/65">
-                All books in your library are completed! Add more books to arrange your reading queue.
-              </p>
-            ) : (
-              books
-                .filter((book) => book.status !== "Completed")
-                .map((book) => {
-                  const selected = heroPickerMode === "current" ? currentBook?.id === book.id : upNextIds.includes(book.id);
-                  return (
-                    <Button
-                      key={book.id}
-                      type="button"
-                      variant="ghost"
-                      className={`hero-picker-option ${selected ? "is-selected" : ""}`}
-                      onClick={() => heroPickerMode === "current" ? chooseCurrentRead(book) : toggleUpNext(book.id)}
-                    >
-                      <span className="hero-picker-cover">
-                        {book.cover ? <img src={book.cover} alt="" /> : <BookOpen aria-hidden="true" />}
-                      </span>
-                      <span className="hero-picker-copy"><strong>{book.title}</strong><small>{book.author}</small></span>
-                      <span className="hero-picker-check" aria-hidden="true">{selected ? <Check /> : <ChevronRight />}</span>
-                    </Button>
-                  );
-                })
-            )}
-          </div>
-          {heroPickerMode === "up-next" && <p className="hero-picker-count">{upNextIds.length} of 3 selected</p>}
-        </DialogContent>
-      </Dialog>
     </main>
   );
 }

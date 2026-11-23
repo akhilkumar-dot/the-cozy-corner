@@ -12,12 +12,7 @@
  */
 
 import { getPdf, loadBooksFromIndexedDb, saveBooksToIndexedDb } from "./pdfStore";
-import {
-  isSupabaseConfigured,
-  supabase,
-  uploadCoverToStorage,
-  type DbBookRow,
-} from "./supabase";
+import { isSupabaseConfigured, supabase, uploadCoverToStorage, type DbBookRow } from "./supabase";
 
 const BOOKS_KEY = "book-nook-books-v1";
 const MIGRATION_FLAG = "book-nook-migrated-to-supabase-v1";
@@ -68,7 +63,7 @@ function dataUrlToBlob(dataUrl: string): Blob {
 async function runBatched<T>(
   items: T[],
   concurrency: number,
-  worker: (item: T, index: number) => Promise<void>
+  worker: (item: T, index: number) => Promise<void>,
 ): Promise<void> {
   let cursor = 0;
   async function next(): Promise<void> {
@@ -83,7 +78,7 @@ async function runBatched<T>(
 }
 
 export async function migrateEverythingToSupabase(
-  onProgress?: (p: MigrationProgress) => void
+  onProgress?: (p: MigrationProgress) => void,
 ): Promise<MigrationResult> {
   const result: MigrationResult = {
     totalBooks: 0,
@@ -194,9 +189,7 @@ export async function migrateEverythingToSupabase(
         pdf_storage_path: pdfStoragePath,
       };
 
-      const { error: rowErr } = await client
-        .from("books")
-        .upsert(row, { onConflict: "id" });
+      const { error: rowErr } = await client.from("books").upsert(row, { onConflict: "id" });
 
       if (rowErr) {
         throw new Error(`Row upsert failed: ${rowErr.message}`);
@@ -223,7 +216,7 @@ export async function migrateEverythingToSupabase(
   try {
     localStorage.setItem(
       BOOKS_KEY,
-      JSON.stringify(updatedBooks.map((b) => ({ ...b, loading: false })))
+      JSON.stringify(updatedBooks.map((b) => ({ ...b, loading: false }))),
     );
     localStorage.setItem(MIGRATION_FLAG, "true");
     void saveBooksToIndexedDb(updatedBooks.map((b) => ({ ...b, loading: false })));
