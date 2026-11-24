@@ -11,10 +11,31 @@ export function SiteHeader({ activePage = "home" }: { activePage?: "home" | "she
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
+<<<<<<< HEAD
     <header className="dds-site-header">
       <div className="dds-header-inner">
         {/* Mobile Menu Trigger (< 640px) + Desktop/Tablet Nav Links (>= 640px) */}
         <div className="flex items-center min-w-0">
+=======
+    <header className="site-header">
+      <Link to="/" className="logo-mark" aria-label="The Book Nook home">
+        <span className="logo-icon-box">
+          <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
+        </span>
+        The Book Nook.
+      </Link>
+      <nav>
+        <Link
+          to="/shelf"
+          className={
+            activePage === "shelf" ? "site-nav-active" : ""
+          }
+        >
+          My shelf
+        </Link>
+        <a href={activePage === "shelf" ? "#quote" : "/shelf#quote"}>Bookish wisdom</a>
+        {isSupabaseConfigured && (
+>>>>>>> 9c87d7b8f0881f0eb1ba16a7a05a0131bf630ff8
           <button
             type="button"
             onClick={() => setMobileMenuOpen((prev) => !prev)}

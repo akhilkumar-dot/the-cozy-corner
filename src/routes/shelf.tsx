@@ -35,6 +35,8 @@ export const Route = createFileRoute("/shelf")({
         property: "og:description",
         content: "Your entire collection of books to read and stories completed.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: ShelfPage,
