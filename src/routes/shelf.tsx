@@ -160,7 +160,7 @@ function ShelfPage() {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search title, author, or genre…"
-                  className="focus-visible:ring-0"
+                  className="flex-1 h-full border-0 bg-transparent shadow-none rounded-none px-2.5 focus-visible:ring-0"
                 />
                 {query && (
                   <Button
@@ -168,6 +168,7 @@ function ShelfPage() {
                     size="icon"
                     onClick={() => setQuery("")}
                     aria-label="Clear search"
+                    className="h-7 w-7 rounded-full shrink-0 hover:bg-[#FAF5E8]"
                   >
                     <X />
                   </Button>

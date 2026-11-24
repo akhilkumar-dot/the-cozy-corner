@@ -7,8 +7,12 @@ import {
   BookOpen,
   Check,
   ChevronRight,
+  Eye,
+  EyeOff,
   FileText,
+  Gift,
   Library,
+  Shuffle,
   Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -39,6 +43,16 @@ export const Route = createFileRoute("/")({
   component: HomePage,
 });
 
+type MoodKey = "all" | "heart" | "cozy" | "thrill" | "classic";
+
+const MOOD_GROUPS: Record<MoodKey, readonly string[]> = {
+  all: [],
+  heart: ["Romance", "Young Adult"],
+  cozy: ["Cozy Fiction", "Literary Fiction", "Fiction"],
+  thrill: ["Mystery & Thriller", "Sci-Fi & Fantasy"],
+  classic: ["Classics", "Historical Fiction", "Memoir & Biography", "Self-Help", "Non-Fiction"],
+};
+
 function HomePage() {
   const {
     books,
@@ -55,6 +69,7 @@ function HomePage() {
     openPdf,
     celebrating,
     addBook,
+    chooseCurrentRead,
   } = useBooks();
 
   const navigate = useNavigate();
@@ -68,6 +83,34 @@ function HomePage() {
   const [quickStatus, setQuickStatus] = useState<Status>("TBR");
   const [quickGenre, setQuickGenre] = useState<string>("Fiction");
 
+  // Interactive "Blind Date With Your TBR" surprise matcher state
+  const [activeMood, setActiveMood] = useState<MoodKey>("all");
+  const [mysteryMode, setMysteryMode] = useState(true);
+  const [unwrapped, setUnwrapped] = useState(false);
+  const [surpriseIndex, setSurpriseIndex] = useState(0);
+
+  const unreadPool = useMemo(() => {
+    const base = books.filter((b) => b.status === "TBR");
+    const source = base.length > 0 ? base : books.filter((b) => b.status !== "Completed");
+    if (activeMood === "all") return source;
+    const allowed = MOOD_GROUPS[activeMood];
+    return source.filter((b) => allowed.includes(b.genre || "Fiction"));
+  }, [books, activeMood]);
+
+  const surpriseBook = unreadPool.length > 0 ? unreadPool[surpriseIndex % unreadPool.length] : null;
+
+  const spinSurpriseBook = () => {
+    if (unreadPool.length === 0) return;
+    setUnwrapped(!mysteryMode);
+    if (unreadPool.length === 1) {
+      setSurpriseIndex(0);
+      return;
+    }
+    const currentIdx = surpriseIndex % unreadPool.length;
+    const offset = 1 + Math.floor(Math.random() * (unreadPool.length - 1));
+    setSurpriseIndex((currentIdx + offset) % unreadPool.length);
+  };
+
   const shelfBreakdown = useMemo(() => {
     const filtered = books.filter((b) => b.status === menuTab);
     const counts = new Map<string, number>();
@@ -79,8 +122,6 @@ function HomePage() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5);
   }, [books, menuTab]);
-
-  const galleryBooks = useMemo(() => books.slice(0, 5), [books]);
 
   const handleQuickAdd = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -700,39 +741,222 @@ function HomePage() {
           </div>
         </div>
 
-        {/* Cyan Drip Wave into White Gallery + Framed Cream Footer */}
+        {/* Cyan Drip Wave into Creative TBR Blind-Date Section */}
         <DripWave fillColor="#4DC4D8" bottomBgColor="#FCFBF7" variant="cyan-to-cream" />
       </section>
 
-      {/* 7. READ, LOG, LOVE COVER GALLERY STRIP (matching "Grab, Go, Glaze!") */}
-      <section className="bg-[#FCFBF7] pt-6 pb-12">
+      {/* 7. CREATIVE SECTION: BLIND DATE WITH YOUR TBR */}
+      <section className="bg-[#FCFBF7] pt-6 pb-14">
         <div className="dds-container">
-          <div className="text-center max-w-lg mx-auto mb-7">
+          <div className="text-center max-w-2xl mx-auto mb-6">
+            <span className="dds-kicker-chip mb-2.5">
+              <Gift size={13} /> SERENDIPITY PICKER
+            </span>
             <h2 className="font-display font-bold text-3xl sm:text-4xl text-[#103A4E] tracking-tight">
-              Read, Log, Love!
+              Blind Date With Your TBR!
             </h2>
             <p className="text-xs sm:text-sm font-semibold text-[#103A4E]/70 mt-1.5 leading-relaxed">
-              Your shortcut to cozy chapters. Here's a peek at recent covers resting inside your
-              personal shelf.
+              Can't decide what to open next? Pick a mood, draw a surprise read from your unread
+              shelf, and unwrap your next literary match.
             </p>
           </div>
 
-          <div className="flex overflow-x-auto snap-x snap-mandatory gap-3 pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 sm:pb-0 sm:grid sm:grid-cols-3 md:grid-cols-5 sm:gap-4 max-w-5xl mx-auto">
-            {galleryBooks.map((book, idx) => (
+          {/* Mood Filter Pills */}
+          <div
+            className="flex flex-wrap items-center justify-center gap-2 mb-7"
+            role="group"
+            aria-label="Filter surprise pick by reading mood"
+          >
+            {(
+              [
+                { key: "all", label: "✨ Any Mood" },
+                { key: "heart", label: "💘 Heart-Flutter" },
+                { key: "cozy", label: "☕ Warm & Cozy" },
+                { key: "thrill", label: "🔍 Edge of Seat" },
+                { key: "classic", label: "📖 True & Classic" },
+              ] as const
+            ).map((mood) => (
               <button
-                key={book.id}
+                key={mood.key}
                 type="button"
-                onClick={() => setEditingBook(book)}
-                className="dds-gallery-tile w-[42vw] max-w-[165px] shrink-0 snap-start sm:w-auto sm:max-w-none group"
-                title={`View or edit ${book.title}`}
+                onClick={() => {
+                  setActiveMood(mood.key);
+                  setSurpriseIndex(0);
+                  setUnwrapped(!mysteryMode);
+                }}
+                className={`dds-mood-pill ${activeMood === mood.key ? "is-active" : ""}`}
               >
-                {book.cover && !book.loading ? (
-                  <img src={book.cover} alt={`Cover of ${book.title}`} />
-                ) : (
-                  <BookPlaceholder title={book.title} tone={idx} />
-                )}
+                {mood.label}
               </button>
             ))}
+          </div>
+
+          {/* Ticket / Mystery Parcel Card */}
+          <div className="max-w-4xl mx-auto dds-blind-date-shell">
+            <div className="dds-blind-left">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FCE172] text-[#103A4E] text-xs font-extrabold mb-3">
+                  <span>{unreadPool.length} Unread Matches</span>
+                </div>
+                <h3 className="font-display font-bold text-2xl text-[#103A4E] leading-tight">
+                  Spin for a Surprise Story
+                </h3>
+                <p className="text-xs sm:text-sm font-semibold text-[#103A4E]/75 mt-2 leading-relaxed">
+                  Keep Mystery Mode on to judge purely by vibe and blurb before peeking at the
+                  cover.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2.5 mt-5">
+                <Button
+                  type="button"
+                  onClick={spinSurpriseBook}
+                  disabled={unreadPool.length === 0}
+                  className="dds-spin-cta"
+                >
+                  <Shuffle size={15} /> Spin a New Match
+                </Button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !mysteryMode;
+                    setMysteryMode(next);
+                    setUnwrapped(!next);
+                  }}
+                  className="dds-mystery-toggle"
+                >
+                  {mysteryMode ? <EyeOff size={14} /> : <Eye size={14} />}
+                  <span>Mystery Wrap: {mysteryMode ? "ON" : "OFF"}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="dds-blind-right">
+              {!surpriseBook ? (
+                <div className="text-center py-6 px-3">
+                  <p className="font-display font-bold text-lg text-[#103A4E] mb-1">
+                    No unread books in this mood yet
+                  </p>
+                  <p className="text-xs font-semibold text-[#103A4E]/70 mb-4">
+                    Try choosing “Any Mood” or add a new story above.
+                  </p>
+                  <Button
+                    type="button"
+                    onClick={() => setActiveMood("all")}
+                    className="dds-mini-navy-btn h-9 px-4"
+                  >
+                    Show Any Mood
+                  </Button>
+                </div>
+              ) : mysteryMode && !unwrapped ? (
+                <div className="dds-wrapped-parcel">
+                  <div className="dds-parcel-ribbon" aria-hidden="true" />
+                  <div className="relative z-10 flex flex-col items-center text-center">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white text-[#103A4E] text-[0.7rem] font-extrabold uppercase tracking-wider border border-[#103A4E]/15 shadow-xs mb-3">
+                      <Gift size={12} className="text-[#F47A3C]" /> Secret TBR Match ·{" "}
+                      {surpriseBook.genre || "Fiction"}
+                    </span>
+
+                    <p className="font-display font-bold text-xl sm:text-2xl text-[#103A4E] mb-2">
+                      Wrapped & Ready to Read
+                    </p>
+
+                    <p className="text-xs sm:text-sm font-semibold text-[#103A4E]/80 max-w-md italic leading-relaxed mb-5">
+                      {cleanDescription(surpriseBook.description)
+                        ? `“${cleanDescription(surpriseBook.description)
+                            .replace(/<[^>]*>/g, " ")
+                            .slice(0, 130)
+                            .trim()}…”`
+                        : `A mystery ${surpriseBook.genre || "story"} waiting quietly on your shelf—clue: written by ${surpriseBook.author
+                            .split(" ")
+                            .map((w) => `${w[0]}.`)
+                            .join(" ")}`}
+                    </p>
+
+                    <Button
+                      type="button"
+                      onClick={() => setUnwrapped(true)}
+                      className="dds-mini-navy-btn h-10 px-6"
+                    >
+                      Unwrap This Book ✨
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 items-center sm:items-stretch w-full">
+                  <div className="dds-blind-cover">
+                    {surpriseBook.cover && !surpriseBook.loading ? (
+                      <img
+                        src={surpriseBook.cover}
+                        alt={`Cover of ${surpriseBook.title}`}
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                          e.currentTarget.nextElementSibling?.classList.remove("hidden");
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      className={`w-full h-full ${
+                        surpriseBook.cover && !surpriseBook.loading ? "hidden" : ""
+                      }`}
+                    >
+                      <BookPlaceholder title={surpriseBook.title} />
+                    </div>
+                  </div>
+
+                  <div className="flex-1 min-w-0 flex flex-col justify-between text-center sm:text-left">
+                    <div>
+                      <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mb-1.5">
+                        <span className="genre-tag">{surpriseBook.genre || "Fiction"}</span>
+                        <span className="text-[0.66rem] font-extrabold uppercase tracking-wider text-[#0F766E]">
+                          Surprise Match
+                        </span>
+                      </div>
+                      <h3 className="font-display font-bold text-xl sm:text-2xl text-[#103A4E] leading-tight break-words">
+                        {surpriseBook.title}
+                      </h3>
+                      <p className="text-xs sm:text-sm font-bold text-[#F47A3C] mt-0.5 mb-2">
+                        by {surpriseBook.author}
+                      </p>
+                      {cleanDescription(surpriseBook.description) && (
+                        <p className="text-xs text-[#103A4E]/75 line-clamp-2 leading-relaxed mb-3">
+                          {cleanDescription(surpriseBook.description).replace(/<[^>]*>/g, " ")}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 justify-center sm:justify-start pt-1">
+                      <Button
+                        type="button"
+                        onClick={() => chooseCurrentRead(surpriseBook)}
+                        className="dds-action-pill-teal"
+                      >
+                        <BookOpen size={13} /> Read This Now
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setEditingBook(surpriseBook)}
+                        className="dds-action-pill-outline"
+                      >
+                        Details
+                      </Button>
+                      {mysteryMode && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => setUnwrapped(false)}
+                          className="dds-action-pill-yellow"
+                        >
+                          Re-wrap
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </section>
