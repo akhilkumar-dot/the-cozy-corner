@@ -173,48 +173,65 @@ function ShelfPage() {
                   </Button>
                 )}
               </label>
-              <label className="sort-box">
-                <ArrowDownAZ />
-                <span className="sr-only">Sort books</span>
-                <select
-                  aria-label="Sort books"
-                  value={sort}
-                  onChange={(e) => setSort(e.target.value as SortMode)}
-                >
-                  <option value="recent">Recently added</option>
-                  <option value="title">Title A–Z</option>
-                  <option value="author">Author A–Z</option>
-                </select>
-              </label>
+
+              <div className="shelf-selects-pair">
+                <label className="sort-box">
+                  <Sparkles className="text-[#F47A3C]" />
+                  <span className="sr-only">Filter by genre</span>
+                  <select
+                    aria-label="Filter by genre"
+                    value={selectedGenre}
+                    onChange={(e) => setSelectedGenre(e.target.value)}
+                  >
+                    {availableGenres.map((g) => (
+                      <option key={g} value={g}>
+                        {g === "All" ? "All Genres" : g}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="sort-box">
+                  <ArrowDownAZ />
+                  <span className="sr-only">Sort books</span>
+                  <select
+                    aria-label="Sort books"
+                    value={sort}
+                    onChange={(e) => setSort(e.target.value as SortMode)}
+                  >
+                    <option value="recent">Recently added</option>
+                    <option value="title">Title A–Z</option>
+                    <option value="author">Author A–Z</option>
+                  </select>
+                </label>
+              </div>
             </div>
           </div>
 
-          <div className="genre-filter-strip" role="group" aria-label="Filter by genre">
-            <span className="genre-filter-label">
-              <Sparkles className="w-3.5 h-3.5" /> Genre:
-            </span>
-            <div className="genre-pill-list">
-              {availableGenres.map((g) => (
+          {(selectedGenre !== "All" || query) && (
+            <div className="flex flex-wrap items-center gap-2 mb-5">
+              {selectedGenre !== "All" && (
                 <button
-                  key={g}
                   type="button"
-                  onClick={() => setSelectedGenre(g)}
-                  className={`genre-filter-pill ${selectedGenre === g ? "is-active" : ""}`}
+                  onClick={() => setSelectedGenre("All")}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#F47A3C] text-white text-xs font-extrabold shadow-xs cursor-pointer hover:bg-[#e06526] transition-colors"
                 >
-                  {g === "All" ? "All Genres" : g}
+                  <span>Genre: {selectedGenre}</span>
+                  <X size={13} />
                 </button>
-              ))}
+              )}
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#4DC4D8]/25 text-[#103A4E] text-xs font-extrabold cursor-pointer hover:bg-[#4DC4D8]/40 transition-colors"
+                >
+                  <span>Search: “{query}”</span>
+                  <X size={13} />
+                </button>
+              )}
             </div>
-            {selectedGenre !== "All" && (
-              <button
-                type="button"
-                className="genre-clear-btn"
-                onClick={() => setSelectedGenre("All")}
-              >
-                Clear filter <X className="w-3.5 h-3.5 inline" />
-              </button>
-            )}
-          </div>
+          )}
 
           {visibleBooks.length ? (
             <div className="book-grid">
