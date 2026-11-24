@@ -451,7 +451,7 @@ function HomePage() {
           </div>
 
           {displayedUpNext.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5 sm:gap-6 max-w-5xl mx-auto">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 sm:gap-6 max-w-5xl mx-auto">
               {displayedUpNext.map((b, i) => (
                 <article
                   key={b.id}
@@ -496,13 +496,35 @@ function HomePage() {
                     </div>
                   </div>
 
-                  <div className="pt-4 pb-2 px-2 text-center">
-                    <h3 className="font-display font-bold text-lg uppercase text-[#103A4E] group-hover:text-[#F47A3C] transition-colors leading-snug line-clamp-1">
-                      {b.title}
-                    </h3>
-                    <p className="text-xs font-bold text-[#103A4E]/65 mt-0.5 truncate">
-                      {b.author || "Unknown Author"}
-                    </p>
+                  <div className="dds-dream-info">
+                    <div className="min-w-0">
+                      <div className="flex sm:hidden items-center justify-between gap-2 mb-1">
+                        <span className="text-[0.68rem] font-extrabold text-[#F47A3C] truncate">
+                          by {b.author || "Unknown Author"}
+                        </span>
+                        {b.genre && <span className="genre-tag shrink-0">{b.genre}</span>}
+                      </div>
+                      <h3 className="font-display font-bold text-base sm:text-lg sm:uppercase text-[#103A4E] group-hover:text-[#F47A3C] transition-colors leading-snug line-clamp-2 sm:line-clamp-1">
+                        {b.title}
+                      </h3>
+                      <p className="hidden sm:block text-xs font-bold text-[#103A4E]/65 mt-0.5 truncate">
+                        {b.author || "Unknown Author"}
+                      </p>
+                      {cleanDescription(b.description) && (
+                        <p className="sm:hidden text-[0.72rem] text-[#103A4E]/70 line-clamp-2 mt-1 leading-snug">
+                          {cleanDescription(b.description).replace(/<[^>]*>/g, " ")}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="sm:hidden flex items-center justify-between pt-2 mt-2 border-t border-[#f2ecdf]">
+                      <span className="text-[0.68rem] font-extrabold uppercase tracking-wider text-[#103A4E]/60">
+                        Up Next #{i + 1}
+                      </span>
+                      <span className="inline-flex items-center gap-0.5 text-xs font-extrabold text-[#103A4E]">
+                        Details <ChevronRight size={13} />
+                      </span>
+                    </div>
                   </div>
                 </article>
               ))}
