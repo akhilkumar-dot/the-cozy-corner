@@ -10,6 +10,7 @@
 - [ ] Verify the redesigned opening area on desktop and mobile
 
 ## Current request — full orange, blue, and white redesign
+
 - [ ] Restyle the home page, bookshelf, shared header, and book dialogs to match the reference’s visual direction
 - [ ] Keep only book-related content and preserve all existing reading actions
 - [ ] Verify desktop/mobile layout, navigation, and book-selection controls

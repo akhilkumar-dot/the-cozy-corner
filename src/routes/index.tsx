@@ -1,4 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import React, { useMemo, useState, type FormEvent } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   ArrowRight,
   Bookmark,
@@ -11,9 +12,12 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { SiteHeader } from "@/components/SiteHeader";
 import { BookPlaceholder, cleanDescription } from "@/components/ReaderArt";
-import { useBooks } from "@/context/BooksContext";
+import { BookMascotArt, DripWave, SiteFooter, SunnyStickerBadge } from "@/components/NookDesign";
+import { defaultDescription, useBooks } from "@/context/BooksContext";
+import { GENRE_OPTIONS, type Book, type Status } from "@/types/book";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -41,6 +45,7 @@ function HomePage() {
     completed,
     reading,
     tbr,
+    rhythm,
     currentBook,
     displayedUpNext,
     setHeroPickerMode,
@@ -49,239 +54,691 @@ function HomePage() {
     handleCompleteBook,
     openPdf,
     celebrating,
+    addBook,
   } = useBooks();
 
+  const navigate = useNavigate();
+
+  // Interactive shelf breakdown tab ("What's on the Shelf" sunny yellow band)
+  const [menuTab, setMenuTab] = useState<Status>("TBR");
+
+  // Quick-add form state ("Craving a New Story?" cyan wave band)
+  const [quickTitle, setQuickTitle] = useState("");
+  const [quickAuthor, setQuickAuthor] = useState("");
+  const [quickStatus, setQuickStatus] = useState<Status>("TBR");
+  const [quickGenre, setQuickGenre] = useState<string>("Fiction");
+
+  const shelfBreakdown = useMemo(() => {
+    const filtered = books.filter((b) => b.status === menuTab);
+    const counts = new Map<string, number>();
+    for (const b of filtered) {
+      const g = b.genre || "Fiction";
+      counts.set(g, (counts.get(g) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+  }, [books, menuTab]);
+
+  const galleryBooks = useMemo(() => books.slice(0, 5), [books]);
+
+  const handleQuickAdd = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const title = quickTitle.trim();
+    const author = quickAuthor.trim();
+    if (!title || !author) return;
+
+    const newBook: Book = {
+      id: crypto.randomUUID(),
+      title,
+      author,
+      cover: "",
+      description: defaultDescription,
+      status: quickStatus,
+      addedAt: Date.now(),
+      loading: true,
+      hasPdf: false,
+      pdfFileName: null,
+      pdfFileSize: null,
+      genre: quickGenre,
+    };
+
+    void addBook(newBook);
+    setQuickTitle("");
+    setQuickAuthor("");
+  };
+
   return (
-    <main className="min-h-screen bg-violet text-ink flex flex-col selection:bg-yellow selection:text-ink">
+    <main className="min-h-screen flex flex-col bg-[#FCFBF7] text-[#103A4E] selection:bg-[#FCE172] selection:text-[#103A4E] overflow-x-clip">
+      {/* 1. CREAM SCALLOPED HEADER */}
       <SiteHeader activePage="home" />
 
-      {/* Hero Dashboard — matches the uploaded home design */}
-      <section id="top" className="hero-section flex-1 flex flex-col justify-center pb-12">
-        <div className="hero-inner">
-          <div className="hero-stage">
-            <div className="hero-copy">
-              <div className="eyebrow">
-                <Sparkles size={14} className="text-yellow" /> YOUR NEXT FAVORITE IS IN HERE
+      {/* 2. CORAL-ORANGE HERO SECTION (matching "Small Donuts, Big Flavor!") */}
+      <section id="top" className="dds-hero-orange">
+        <div className="dds-container relative z-10 pt-10 pb-8 md:pt-14 md:pb-10">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
+            {/* Left Column: Chunky White Fredoka Title, Dark Navy Subtitle, Navy Pill CTA */}
+            <div className="lg:col-span-6 flex flex-col items-start">
+              <div className="dds-hero-eyebrow mb-4">
+                <Sparkles size={13} />
+                <span>YOUR PERSONAL READING NOOK</span>
               </div>
-              <h1 className="hero-title">
-                Dive In to
+
+              <h1 className="dds-hero-heading">
+                Small Moments,
                 <br />
-                Inspiring
-                <br />
-                <span>Stories &</span>
-                <br />
-                Chapters.
+                Big Stories!
               </h1>
-              <p>Every plot twist, late-night chapter, and someday read—right where you need it.</p>
-              <div className="hero-action-row">
-                <Button onClick={() => setModalOpen(true)} className="hero-primary-action">
-                  Add a book <BookHeart size={16} />
+
+              <p className="dds-hero-subcopy">
+                Every plot twist, late-night chapter, and someday read—tucked neatly in one sunny
+                corner.
+              </p>
+
+              <div className="flex flex-wrap items-center gap-4 mt-7">
+                <Button
+                  type="button"
+                  onClick={() => setModalOpen(true)}
+                  className="dds-pill-btn dds-pill-navy dds-pill-lg"
+                >
+                  <span className="dds-pill-icon dds-pill-icon-orange">
+                    <BookHeart size={15} />
+                  </span>
+                  <span className="dds-pill-copy">
+                    <small>Track Every Chapter</small>
+                    <strong>ADD A BOOK TO NOOK</strong>
+                  </span>
                 </Button>
-                <Link to="/shelf" className="hero-browse-link">
+
+                <Link to="/shelf" className="dds-hero-browse-text">
                   BROWSE MY SHELF <ArrowRight size={15} />
                 </Link>
               </div>
             </div>
 
-            {/* Current Read Neo-brutalist Yellow Card */}
-            <article className="hero-card hcard-reading relative">
-              <div className="hero-soundwave-sticker" aria-hidden="true">
-                <span className="soundwave-bar" style={{ animationDelay: "0s" }} />
-                <span className="soundwave-bar" style={{ animationDelay: "0.2s" }} />
-                <span className="soundwave-bar" style={{ animationDelay: "0.4s" }} />
-                <span className="soundwave-bar" style={{ animationDelay: "0.1s" }} />
-                <span className="soundwave-bar" style={{ animationDelay: "0.3s" }} />
-              </div>
-              <div className="hcard-topline">
-                <div className="hcard-label">
-                  <BookOpen size={14} /> CURRENT READ
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="hcard-choose"
-                  onClick={() => setHeroPickerMode("current")}
-                >
-                  CHOOSE BOOK
-                </Button>
-              </div>
+            {/* Right Column: Current Read Showcase + Tilted Sunny Yellow Sticker */}
+            <div className="lg:col-span-6 relative flex justify-center lg:justify-end pt-4 lg:pt-0">
+              <div className="relative w-full max-w-[490px]">
+                <SunnyStickerBadge topText={`${books.length}+`} bottomText="Stories to Love!" />
 
-              {currentBook ? (
-                <div className="hcard-reading-body">
-                  <div className="hero-feature-cover">
-                    {currentBook.cover && !currentBook.loading ? (
-                      <img
-                        src={currentBook.cover}
-                        alt={`Cover of ${currentBook.title}`}
-                        onError={(e) => {
-                          e.currentTarget.style.display = "none";
-                          e.currentTarget.nextElementSibling?.classList.remove("hidden");
-                        }}
-                      />
-                    ) : null}
-                    <div
-                      className={`hero-feature-placeholder${currentBook.cover && !currentBook.loading ? " hidden" : ""}`}
+                <article className="dds-reading-showcase">
+                  <div className="dds-reading-topbar">
+                    <span className="dds-kicker-chip">
+                      <BookOpen size={13} /> CURRENT READ
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setHeroPickerMode("current")}
+                      className="dds-mini-navy-btn"
                     >
-                      <BookPlaceholder title={currentBook.title} />
-                    </div>
+                      CHOOSE BOOK
+                    </Button>
                   </div>
-                  <div className="hcard-reading-info">
-                    <span className="hero-feature-kicker">ON YOUR NIGHTSTAND</span>
-                    <h3>{currentBook.title}</h3>
-                    <p className="hcard-author">by {currentBook.author}</p>
-                    {cleanDescription(currentBook.description) && (
-                      <blockquote className="hcard-quote">
-                        “
-                        {cleanDescription(currentBook.description)
-                          .replace(/<[^>]*>/g, " ")
-                          .slice(0, 92)
-                          .trim()}
-                        …”
-                      </blockquote>
-                    )}
-                    <div className="hcard-actions-row">
-                      <Button
-                        type="button"
-                        className="hcard-complete-btn"
-                        onClick={() => handleCompleteBook(currentBook.id)}
-                        title="Mark this book as completed"
-                      >
-                        <Check size={13} /> Mark completed
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="hcard-update-btn"
-                        onClick={() => setEditingBook(currentBook)}
-                      >
-                        <BookOpen size={13} /> Details
-                      </Button>
-                      {currentBook.hasPdf && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          className="pdf-pill"
-                          onClick={() => openPdf(currentBook.id)}
-                          title="Open PDF"
+
+                  {currentBook ? (
+                    <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-stretch">
+                      {/* Book Cover */}
+                      <div className="dds-showcase-cover">
+                        {currentBook.cover && !currentBook.loading ? (
+                          <img
+                            src={currentBook.cover}
+                            alt={`Cover of ${currentBook.title}`}
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                              e.currentTarget.nextElementSibling?.classList.remove("hidden");
+                            }}
+                          />
+                        ) : null}
+                        <div
+                          className={`w-full h-full ${
+                            currentBook.cover && !currentBook.loading ? "hidden" : ""
+                          }`}
                         >
-                          <FileText size={13} /> Read PDF
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="hcard-reading-empty">
-                  <BookOpen size={32} />
-                  <p>What are you reading?</p>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="hero-empty-choose"
-                    onClick={() => setHeroPickerMode("current")}
-                  >
-                    Choose your current read <ArrowRight size={15} />
-                  </Button>
-                </div>
-              )}
-              {celebrating === currentBook?.id && (
-                <div className="confetti" aria-hidden="true">
-                  ✦ <span>♥</span> ★ <b>✦</b> ●
-                </div>
-              )}
-            </article>
-          </div>
-
-          {/* Reading Statistics Magenta Band */}
-          <div className="hero-stats-band" aria-label="Reading statistics">
-            <div className="hero-stat">
-              <span className="hero-stat-icon-badge" aria-hidden="true">
-                <Library size={18} />
-              </span>
-              <div className="hero-stat-text">
-                <strong>{books.length}</strong>
-                <span>Books In Nook</span>
-              </div>
-            </div>
-            <div className="hero-stat">
-              <span className="hero-stat-icon-badge" aria-hidden="true">
-                <Check size={18} />
-              </span>
-              <div className="hero-stat-text">
-                <strong>{completed}</strong>
-                <span>Stories Finished</span>
-              </div>
-            </div>
-            <div className="hero-stat">
-              <span className="hero-stat-icon-badge" aria-hidden="true">
-                <Bookmark size={18} />
-              </span>
-              <div className="hero-stat-text">
-                <strong>{tbr}</strong>
-                <span>On Your TBR</span>
-              </div>
-            </div>
-            <div className="hero-stat">
-              <span className="hero-stat-icon-badge" aria-hidden="true">
-                <Sparkles size={18} />
-              </span>
-              <div className="hero-stat-text">
-                <strong>{reading > 0 ? reading : currentBook ? 1 : 0}</strong>
-                <span>Reading Now</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Up Next Queue */}
-          <div className="w-full">
-            <div className="hero-card hcard-queue">
-              <div className="hcard-queue-header">
-                <span className="hcard-queue-title">Up next</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="hcard-queue-viewall"
-                  onClick={() => setHeroPickerMode("up-next")}
-                >
-                  CHOOSE BOOKS
-                </Button>
-              </div>
-              {displayedUpNext.length > 0 ? (
-                displayedUpNext.map((b, i) => {
-                  const badgeClass =
-                    i === 0
-                      ? "hqueue-badge--yellow"
-                      : i === 1
-                        ? "hqueue-badge--mint"
-                        : "hqueue-badge--coral";
-                  return (
-                    <div
-                      key={b.id}
-                      className="hcard-queue-item cursor-pointer"
-                      onClick={() => setEditingBook(b)}
-                      role="button"
-                      tabIndex={0}
-                    >
-                      <span className={`hqueue-badge ${badgeClass}`}>0{i + 1}</span>
-                      <div className="hqueue-info">
-                        <span className="hqueue-title">{b.title}</span>
-                        {b.author && <span className="hqueue-author">{b.author}</span>}
+                          <BookPlaceholder title={currentBook.title} />
+                        </div>
                       </div>
-                      <ChevronRight size={14} className="hqueue-arrow" />
+
+                      {/* Book Metadata & Controls */}
+                      <div className="flex-1 min-w-0 flex flex-col justify-between text-center sm:text-left">
+                        <div>
+                          <span className="text-[0.65rem] font-extrabold uppercase tracking-[0.12em] text-[#4CC1D4] block mb-1">
+                            ON YOUR NIGHTSTAND
+                          </span>
+                          <h2 className="font-display font-bold text-2xl text-[#103A4E] leading-tight break-words">
+                            {currentBook.title}
+                          </h2>
+                          <p className="text-sm font-bold text-[#F47A3C] mt-0.5 mb-2">
+                            by {currentBook.author}
+                          </p>
+                          {cleanDescription(currentBook.description) && (
+                            <blockquote className="text-xs text-[#103A4E]/75 italic leading-relaxed border-l-2 border-[#4CC1D4] pl-2.5 line-clamp-2 mb-3 text-left">
+                              “
+                              {cleanDescription(currentBook.description)
+                                .replace(/<[^>]*>/g, " ")
+                                .slice(0, 96)
+                                .trim()}
+                              …”
+                            </blockquote>
+                          )}
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 justify-center sm:justify-start pt-1">
+                          <Button
+                            type="button"
+                            onClick={() => handleCompleteBook(currentBook.id)}
+                            className="dds-action-pill-teal"
+                          >
+                            <Check size={13} /> Mark completed
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => setEditingBook(currentBook)}
+                            className="dds-action-pill-outline"
+                          >
+                            <BookOpen size={13} /> Details
+                          </Button>
+                          {currentBook.hasPdf && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={() => openPdf(currentBook.id)}
+                              className="dds-action-pill-yellow"
+                              title="Open PDF"
+                            >
+                              <FileText size={13} /> Read PDF
+                            </Button>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  );
-                })
-              ) : (
-                <div className="hqueue-empty-state">
-                  <p>
-                    Your next chapter starts here. Choose up to three books for your reading queue.
-                  </p>
-                </div>
-              )}
+                  ) : (
+                    <div className="py-8 px-4 text-center flex flex-col items-center">
+                      <div className="w-14 h-14 rounded-full bg-[#4CC1D4]/20 text-[#103A4E] flex items-center justify-center mb-3">
+                        <BookOpen size={26} />
+                      </div>
+                      <h3 className="font-display font-bold text-xl text-[#103A4E] mb-1">
+                        What are you reading right now?
+                      </h3>
+                      <p className="text-xs text-[#103A4E]/70 max-w-xs mb-4">
+                        Pick a title from your shelf to spotlight it right here.
+                      </p>
+                      <Button
+                        type="button"
+                        onClick={() => setHeroPickerMode("current")}
+                        className="dds-mini-navy-btn px-4 h-9"
+                      >
+                        Choose your current read <ArrowRight size={13} className="ml-1" />
+                      </Button>
+                    </div>
+                  )}
+
+                  {celebrating === currentBook?.id && (
+                    <div className="confetti" aria-hidden="true">
+                      ✦ <span>♥</span> ★ <b>✦</b> ●
+                    </div>
+                  )}
+                </article>
+              </div>
             </div>
           </div>
         </div>
+
+        {/* Orange Frosting Drip Wave overlapping Cyan Story Band */}
+        <DripWave fillColor="#F47A3C" bottomBgColor="#4DC4D8" variant="orange-to-cyan" />
       </section>
+
+      {/* 3. BRIGHT CYAN STORY & STATS SECTION (matching "Serving Sweetness by the Dozen") */}
+      <section className="dds-cyan-band">
+        <div className="dds-container pt-4 pb-10 md:pt-6 md:pb-12">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+            {/* Left Copy */}
+            <div className="lg:col-span-5 flex flex-col items-start">
+              <h2 className="dds-cyan-heading">
+                Serving Stories
+                <br />
+                by the Chapter
+              </h2>
+
+              <div className="dds-cyan-copy space-y-3 my-5">
+                <p className="font-bold italic text-[#0E2F3F]">
+                  The Book Nook is your cheerful literary hideout—built to turn every spare ten
+                  minutes into a mini escape.
+                </p>
+                <p>
+                  Keep your current nightstand pick front and center, line up your next three reads,
+                  and never lose track of a book recommendation again.
+                </p>
+                <p>
+                  Whether you breeze through weekend thrillers or savor quiet morning classics, your
+                  entire library stays organized, searchable, and ready when you are.
+                </p>
+              </div>
+
+              <Link to="/shelf" className="dds-pill-btn dds-pill-navy">
+                <span className="dds-pill-icon dds-pill-icon-cyan">
+                  <Library size={14} />
+                </span>
+                <span className="dds-pill-copy">
+                  <small>TBR, Reading & Completed</small>
+                  <strong>CHECK OUT MY SHELF</strong>
+                </span>
+              </Link>
+            </div>
+
+            {/* Right Showcase Window Card (matching the warm awning shack balance) */}
+            <div className="lg:col-span-7">
+              <div className="dds-nook-window">
+                <div className="dds-nook-awning">
+                  <span className="dds-awning-tag">THE BOOK NOOK · LIVE STATS</span>
+                  <span className="dds-awning-pace">{rhythm}</span>
+                </div>
+
+                <div className="p-5 sm:p-6">
+                  <div
+                    className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4"
+                    aria-label="Reading statistics"
+                  >
+                    <div className="dds-stat-tile">
+                      <span className="dds-stat-badge bg-[#F47A3C]/15 text-[#F47A3C]">
+                        <Library size={18} />
+                      </span>
+                      <strong>{books.length}</strong>
+                      <span>Books In Nook</span>
+                    </div>
+
+                    <div className="dds-stat-tile">
+                      <span className="dds-stat-badge bg-emerald-500/15 text-emerald-700">
+                        <Check size={18} />
+                      </span>
+                      <strong>{completed}</strong>
+                      <span>Stories Finished</span>
+                    </div>
+
+                    <div className="dds-stat-tile">
+                      <span className="dds-stat-badge bg-[#FCE172]/55 text-[#8A6300]">
+                        <Bookmark size={18} />
+                      </span>
+                      <strong>{tbr}</strong>
+                      <span>On Your TBR</span>
+                    </div>
+
+                    <div className="dds-stat-tile">
+                      <span className="dds-stat-badge bg-[#4DC4D8]/25 text-[#103A4E]">
+                        <Sparkles size={18} />
+                      </span>
+                      <strong>{reading > 0 ? reading : currentBook ? 1 : 0}</strong>
+                      <span>Reading Now</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Cyan Frosting Drip Wave overlapping Warm White Showcase */}
+        <DripWave fillColor="#4DC4D8" bottomBgColor="#FCFBF7" variant="cyan-to-cream" />
+      </section>
+
+      {/* 4. WARM WHITE UP NEXT SHOWCASE (matching "Meet the Donuts of Your Dreams") */}
+      <section className="bg-[#FCFBF7] pt-8 pb-10">
+        <div className="dds-container">
+          <div className="text-center max-w-2xl mx-auto mb-8">
+            <h2 className="font-display font-bold text-3xl sm:text-4xl md:text-[2.6rem] text-[#103A4E] tracking-tight leading-tight">
+              Meet the Reads of Your Dreams
+            </h2>
+            <p className="text-sm sm:text-base text-[#103A4E]/70 font-semibold mt-1.5">
+              Up Next on Your Nightstand — Pick 'Em Before Bedtime!
+            </p>
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+              <Button
+                type="button"
+                onClick={() => setHeroPickerMode("up-next")}
+                className="dds-mini-navy-btn h-9 px-4"
+              >
+                Choose Up Next Books
+              </Button>
+              <Link
+                to="/shelf"
+                className="text-xs font-extrabold uppercase tracking-wider text-[#F47A3C] hover:text-[#103A4E] inline-flex items-center gap-1 transition-colors"
+              >
+                Full Bookshelf <ArrowRight size={13} />
+              </Link>
+            </div>
+          </div>
+
+          {displayedUpNext.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5 sm:gap-6 max-w-5xl mx-auto">
+              {displayedUpNext.map((b, i) => (
+                <article
+                  key={b.id}
+                  onClick={() => setEditingBook(b)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setEditingBook(b);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  className="dds-dream-card group cursor-pointer"
+                >
+                  <div className="dds-dream-image-box">
+                    <span
+                      className={`dds-dream-rank ${
+                        i === 0
+                          ? "bg-[#FCE172] text-[#103A4E]"
+                          : i === 1
+                            ? "bg-[#4DC4D8] text-[#103A4E]"
+                            : "bg-[#F47A3C] text-white"
+                      }`}
+                    >
+                      0{i + 1}
+                    </span>
+
+                    <div className="dds-dream-cover">
+                      {b.cover && !b.loading ? (
+                        <img
+                          src={b.cover}
+                          alt={`Cover of ${b.title}`}
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                            e.currentTarget.nextElementSibling?.classList.remove("hidden");
+                          }}
+                        />
+                      ) : null}
+                      <div className={`w-full h-full ${b.cover && !b.loading ? "hidden" : ""}`}>
+                        <BookPlaceholder title={b.title} tone={i} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 pb-2 px-2 text-center">
+                    <h3 className="font-display font-bold text-lg uppercase text-[#103A4E] group-hover:text-[#F47A3C] transition-colors leading-snug line-clamp-1">
+                      {b.title}
+                    </h3>
+                    <p className="text-xs font-bold text-[#103A4E]/65 mt-0.5 truncate">
+                      {b.author || "Unknown Author"}
+                    </p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="max-w-xl mx-auto text-center bg-white rounded-2xl border border-[#EAE2D0] p-8 shadow-sm">
+              <p className="text-sm font-semibold text-[#103A4E]/75 mb-4">
+                Your Up Next queue is empty! Pick up to three books to stage right here.
+              </p>
+              <Button
+                type="button"
+                onClick={() => setHeroPickerMode("up-next")}
+                className="dds-mini-navy-btn h-9 px-5"
+              >
+                Choose Queue Books
+              </Button>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Cream Wave into Sunny Yellow Shelf Breakdown Band */}
+      <DripWave fillColor="#FCFBF7" bottomBgColor="#FCE172" variant="cream-to-yellow" />
+
+      {/* 5. SUNNY YELLOW SHELF OVERVIEW BAND (matching "What's on the Menu") */}
+      <section className="dds-yellow-band">
+        <div className="dds-container pt-4 pb-10 md:pb-12">
+          <div className="text-center max-w-xl mx-auto mb-8">
+            <h2 className="font-display font-bold text-3xl sm:text-4xl text-[#103A4E] tracking-tight">
+              What's on Your Shelf
+            </h2>
+            <p className="text-xs sm:text-sm font-bold text-[#103A4E]/75 mt-1">
+              Something Cozy, Something Thrilling, Something Unforgettable
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center max-w-5xl mx-auto relative">
+            {/* Left Side: Status Tabs + Cyan Round Badge + Button */}
+            <div className="lg:col-span-5 relative">
+              <div className="space-y-2 mb-6">
+                {(
+                  [
+                    { key: "TBR", label: "To Be Read", count: tbr },
+                    { key: "Reading", label: "Currently Reading", count: reading },
+                    { key: "Completed", label: "Stories Completed", count: completed },
+                  ] as const
+                ).map((item) => {
+                  const active = menuTab === item.key;
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => setMenuTab(item.key)}
+                      className={`dds-menu-tab-row ${active ? "is-active" : ""}`}
+                    >
+                      <span className="font-display font-bold text-base sm:text-lg text-[#103A4E] whitespace-nowrap">
+                        {item.label}
+                      </span>
+                      <span className="flex-1 mx-2 sm:mx-3 border-b-2 border-[#103A4E]/20 min-w-[12px] transition-all" />
+                      <span className="text-xs font-extrabold text-[#103A4E]/70 mr-2 whitespace-nowrap">
+                        {item.count}
+                      </span>
+                      <span
+                        className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+                          active ? "bg-[#113145] text-white" : "bg-white/60 text-[#103A4E]"
+                        }`}
+                      >
+                        <ChevronRight size={14} />
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-center gap-4">
+                <Link to="/shelf" className="dds-pill-btn dds-pill-navy">
+                  <span className="dds-pill-icon dds-pill-icon-orange">
+                    <BookOpen size={13} />
+                  </span>
+                  <span className="dds-pill-copy">
+                    <small>Search & Filter</small>
+                    <strong>OPEN MY SHELF</strong>
+                  </span>
+                </Link>
+
+                {/* Cheerful cyan circle badge matching "Fresh Daily. Gone Quickly!" */}
+                <div className="dds-cyan-circle-badge hidden sm:flex" aria-hidden="true">
+                  <strong>Fresh Reads</strong>
+                  <span>Added Daily!</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Side: Signature Coral-Orange Box with Dotted Leaders + Book Mascot */}
+            <div className="lg:col-span-7">
+              <div className="dds-orange-menu-card">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                  <span className="font-display font-bold text-base sm:text-lg text-[#103A4E] uppercase">
+                    {menuTab === "TBR"
+                      ? "To Be Read Genres"
+                      : menuTab === "Reading"
+                        ? "Currently Reading"
+                        : "Completed Classics & Favorites"}
+                  </span>
+                  <span className="text-xs font-extrabold bg-white/85 text-[#103A4E] px-2.5 py-0.5 rounded-full whitespace-nowrap">
+                    Top Genres
+                  </span>
+                </div>
+
+                {shelfBreakdown.length > 0 ? (
+                  <div className="space-y-2.5 mb-5">
+                    {shelfBreakdown.map(([genre, count]) => (
+                      <button
+                        key={genre}
+                        type="button"
+                        onClick={() => void navigate({ to: "/shelf" })}
+                        className="dds-dotted-menu-row"
+                      >
+                        <span className="font-display font-bold text-sm sm:text-lg text-[#103A4E] truncate">
+                          {genre}
+                        </span>
+                        <span className="dds-dotted-leader" aria-hidden="true" />
+                        <span className="font-extrabold text-xs sm:text-sm text-[#103A4E] whitespace-nowrap shrink-0">
+                          {count} {count === 1 ? "book" : "books"}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm font-semibold text-[#103A4E]/80 py-4">
+                    No books in {menuTab} yet—add one below to fill this shelf!
+                  </p>
+                )}
+
+                <div className="flex items-end justify-between gap-4 pt-2 border-t border-[#103A4E]/15">
+                  <div className="text-xs font-bold text-[#103A4E] leading-relaxed">
+                    <div className="uppercase tracking-wider opacity-75 mb-0.5">Library Totals</div>
+                    <div>
+                      All Stories: <strong>{books.length}</strong> · TBR: <strong>{tbr}</strong> ·
+                      Done: <strong>{completed}</strong>
+                    </div>
+                  </div>
+                  <BookMascotArt />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Yellow Wave into Cyan Quick-Add Band */}
+        <DripWave fillColor="#FCE172" bottomBgColor="#4DC4D8" variant="yellow-to-cyan" />
+      </section>
+
+      {/* 6. BRIGHT CYAN QUICK-ADD BOOK SECTION (matching "Craving Donuts?" form band) */}
+      <section className="dds-cyan-band relative overflow-hidden pt-4 pb-8">
+        <div className="dds-doodle-pattern dds-doodle-cyan" aria-hidden="true" />
+
+        <div className="dds-container relative z-10 pb-8">
+          <div className="text-center max-w-xl mx-auto mb-7">
+            <h2 className="font-display font-bold text-3xl sm:text-4xl text-[#103A4E] tracking-tight">
+              Craving a New Story?
+            </h2>
+            <p className="text-xs sm:text-sm font-bold text-[#0E2F3F]/80 mt-1">
+              Quick-add a book straight to your shelf — we'll look up its cover automatically!
+            </p>
+          </div>
+
+          <div className="max-w-2xl mx-auto">
+            <form onSubmit={handleQuickAdd} className="dds-frosted-form-card">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <label className="dds-quick-field">
+                  <span>Book Title</span>
+                  <Input
+                    required
+                    value={quickTitle}
+                    onChange={(e) => setQuickTitle(e.target.value)}
+                    placeholder="e.g. Tomorrow, and Tomorrow..."
+                    className="dds-quick-input"
+                  />
+                </label>
+
+                <label className="dds-quick-field">
+                  <span>Author</span>
+                  <Input
+                    required
+                    value={quickAuthor}
+                    onChange={(e) => setQuickAuthor(e.target.value)}
+                    placeholder="e.g. Gabrielle Zevin"
+                    className="dds-quick-input"
+                  />
+                </label>
+
+                <label className="dds-quick-field">
+                  <span>Shelf</span>
+                  <select
+                    value={quickStatus}
+                    onChange={(e) => setQuickStatus(e.target.value as Status)}
+                    className="dds-quick-select"
+                  >
+                    <option value="TBR">To Be Read</option>
+                    <option value="Reading">Currently Reading</option>
+                    <option value="Completed">Completed</option>
+                  </select>
+                </label>
+
+                <label className="dds-quick-field">
+                  <span>Genre</span>
+                  <select
+                    value={quickGenre}
+                    onChange={(e) => setQuickGenre(e.target.value)}
+                    className="dds-quick-select"
+                  >
+                    {GENRE_OPTIONS.map((g) => (
+                      <option key={g} value={g}>
+                        {g}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-[#103A4E]/10 flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(true)}
+                  className="text-xs font-extrabold text-[#103A4E] underline underline-offset-4 hover:text-[#F47A3C] cursor-pointer"
+                >
+                  Want to upload a custom cover or PDF? Open full form →
+                </button>
+
+                <Button type="submit" className="dds-mini-navy-btn px-6 h-10 w-full sm:w-auto">
+                  + Tuck onto Shelf
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        {/* Cyan Drip Wave into White Gallery + Framed Cream Footer */}
+        <DripWave fillColor="#4DC4D8" bottomBgColor="#FCFBF7" variant="cyan-to-cream" />
+      </section>
+
+      {/* 7. READ, LOG, LOVE COVER GALLERY STRIP (matching "Grab, Go, Glaze!") */}
+      <section className="bg-[#FCFBF7] pt-6 pb-12">
+        <div className="dds-container">
+          <div className="text-center max-w-lg mx-auto mb-7">
+            <h2 className="font-display font-bold text-3xl sm:text-4xl text-[#103A4E] tracking-tight">
+              Read, Log, Love!
+            </h2>
+            <p className="text-xs sm:text-sm font-semibold text-[#103A4E]/70 mt-1.5 leading-relaxed">
+              Your shortcut to cozy chapters. Here's a peek at recent covers resting inside your
+              personal shelf.
+            </p>
+          </div>
+
+          <div className="flex overflow-x-auto snap-x snap-mandatory gap-3 pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 sm:pb-0 sm:grid sm:grid-cols-3 md:grid-cols-5 sm:gap-4 max-w-5xl mx-auto">
+            {galleryBooks.map((book, idx) => (
+              <button
+                key={book.id}
+                type="button"
+                onClick={() => setEditingBook(book)}
+                className="dds-gallery-tile w-[42vw] max-w-[165px] shrink-0 snap-start sm:w-auto sm:max-w-none group"
+                title={`View or edit ${book.title}`}
+              >
+                {book.cover && !book.loading ? (
+                  <img src={book.cover} alt={`Cover of ${book.title}`} />
+                ) : (
+                  <BookPlaceholder title={book.title} tone={idx} />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 8. FRAMED CREAM FOOTER */}
+      <SiteFooter />
     </main>
   );
 }

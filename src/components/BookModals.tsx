@@ -21,7 +21,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { deletePdf, savePdf } from "@/lib/pdfStore";
-import { GENRE_OPTIONS, type Book } from "@/types/book";
+import { GENRE_OPTIONS, type Book, type Status } from "@/types/book";
 import {
   compressImageFile,
   defaultDescription,
@@ -210,6 +210,9 @@ export function BookModal({ open, onOpenChange, onAdd, onSave, editBook }: BookM
       pdfFileSize = editBook.pdfFileSize ?? null;
     }
 
+    const rawStatus = data.get("status");
+    const status: Status =
+      rawStatus === "Completed" ? "Completed" : rawStatus === "Reading" ? "Reading" : "TBR";
     const genre = String(data.get("genre") ?? "Fiction").trim() || "Fiction";
 
     const book: Book = {
@@ -217,7 +220,7 @@ export function BookModal({ open, onOpenChange, onAdd, onSave, editBook }: BookM
       title,
       author,
       description: String(data.get("description") ?? "").trim() || defaultDescription,
-      status: data.get("status") === "Completed" ? "Completed" : "TBR",
+      status,
       cover,
       addedAt: isEdit && editBook ? editBook.addedAt : Date.now(),
       loading: !cover && !isEdit,
@@ -241,12 +244,12 @@ export function BookModal({ open, onOpenChange, onAdd, onSave, editBook }: BookM
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto border-2 border-ink bg-cream shadow-playful sm:max-w-xl sm:rounded-sm">
+      <DialogContent className="dds-dialog w-[calc(100vw-1.5rem)] sm:w-full max-h-[92vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle className="font-display text-3xl">
+          <DialogTitle className="font-display text-3xl text-[#103A4E]">
             {isEdit ? "Edit this adventure" : "Add a new adventure"}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-[#103A4E]/75 font-medium">
             {isEdit
               ? "Update the details below. Your changes save in place."
               : "Pop in the details now. We'll look for a cover if you don't add one."}
@@ -324,7 +327,7 @@ export function BookModal({ open, onOpenChange, onAdd, onSave, editBook }: BookM
               key={`desc-${editBook?.id ?? "new"}-${open ? "open" : "closed"}`}
             />
           </label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="field-label">
               Shelf
               <select
@@ -354,17 +357,14 @@ export function BookModal({ open, onOpenChange, onAdd, onSave, editBook }: BookM
               </select>
             </label>
           </div>
-          <Button
-            type="submit"
-            className="h-12 w-full rounded-full border-2 border-ink bg-coral font-display text-base text-ink shadow-button hover:bg-coral/90"
-          >
+          <Button type="submit" className="dds-modal-submit">
             {isEdit ? (
               <>
-                Save Changes <Check />
+                Save Changes <Check size={16} />
               </>
             ) : (
               <>
-                Add to my nook <BookHeart />
+                Add to my nook <BookHeart size={16} />
               </>
             )}
           </Button>
@@ -416,18 +416,18 @@ export function BooksSharedModals() {
           if (!open) setBookToDelete(null);
         }}
       >
-        <DialogContent className="max-w-md border-2 border-ink bg-card p-6 shadow-playful rounded-xl sm:rounded-xl">
+        <DialogContent className="dds-dialog w-[calc(100vw-1.5rem)] sm:w-full max-w-md p-6">
           <div className="flex items-start gap-3.5">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border-2 border-ink bg-coral/20 text-coral shadow-[2px_2px_0_var(--ink)]">
-              <Trash2 className="h-5 w-5 text-coral" />
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border-2 border-[#F47A3C]/40 bg-[#F47A3C]/15 text-[#F47A3C]">
+              <Trash2 className="h-5 w-5" />
             </div>
             <div className="flex-1 min-w-0">
-              <DialogTitle className="font-display text-xl font-extrabold text-ink">
+              <DialogTitle className="font-display text-xl font-bold text-[#103A4E]">
                 Remove from your nook?
               </DialogTitle>
-              <DialogDescription className="mt-1.5 text-sm text-ink/75 leading-relaxed">
+              <DialogDescription className="mt-1.5 text-sm text-[#103A4E]/75 leading-relaxed">
                 Are you sure you want to remove{" "}
-                <strong className="text-ink font-bold">"{bookToDelete?.title}"</strong>
+                <strong className="text-[#103A4E] font-bold">"{bookToDelete?.title}"</strong>
                 {bookToDelete?.author ? ` by ${bookToDelete.author}` : ""}? This cannot be undone.
               </DialogDescription>
             </div>
@@ -438,14 +438,14 @@ export function BooksSharedModals() {
               type="button"
               variant="ghost"
               onClick={() => setBookToDelete(null)}
-              className="h-10 rounded-lg border-2 border-ink bg-background px-4 font-display font-bold text-ink shadow-[2px_2px_0_var(--ink)] hover:bg-yellow transition-all"
+              className="h-10 rounded-full border-2 border-[#103A4E]/20 bg-white px-4 font-display font-bold text-[#103A4E] hover:bg-[#FCE172]/40 transition-all"
             >
               Cancel
             </Button>
             <Button
               type="button"
               onClick={confirmDeleteBook}
-              className="h-10 rounded-lg border-2 border-ink bg-coral px-4 font-display font-bold text-ink shadow-[2px_2px_0_var(--ink)] hover:bg-red-500 hover:text-white transition-all flex items-center gap-1.5"
+              className="h-10 rounded-full bg-[#F47A3C] hover:bg-[#d96126] px-5 font-display font-bold text-white shadow-sm transition-all flex items-center gap-1.5"
             >
               <Trash2 size={15} /> Yes, remove
             </Button>
@@ -460,12 +460,12 @@ export function BooksSharedModals() {
           if (!open) setHeroPickerMode(null);
         }}
       >
-        <DialogContent className="hero-picker-dialog max-h-[86vh] overflow-y-auto border-2 border-ink bg-cream shadow-playful sm:max-w-2xl sm:rounded-sm">
+        <DialogContent className="dds-dialog hero-picker-dialog w-[calc(100vw-1.5rem)] sm:w-full max-h-[86vh] overflow-y-auto overflow-x-hidden sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="font-display text-3xl">
+            <DialogTitle className="font-display text-3xl text-[#103A4E]">
               {heroPickerMode === "current" ? "Choose your current read" : "Choose what’s up next"}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-[#103A4E]/75 font-medium">
               {heroPickerMode === "current"
                 ? "Pick one book to feature at the top of your nook."
                 : "Pick up to three books and arrange your immediate reading queue."}
@@ -473,7 +473,7 @@ export function BooksSharedModals() {
           </DialogHeader>
           <div className="hero-picker-list">
             {books.filter((b) => b.status !== "Completed").length === 0 ? (
-              <p className="p-6 text-center text-sm text-ink/65">
+              <p className="p-6 text-center text-sm text-[#103A4E]/65">
                 All books in your library are completed! Add more books to arrange your reading
                 queue.
               </p>

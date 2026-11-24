@@ -55,7 +55,7 @@ export function ReaderIllustration({ side }: { side: "left" | "right" }) {
 }
 
 export function BookPlaceholder({ title, tone = 0 }: { title: string; tone?: number }) {
-  const tones = ["bg-sky", "bg-yellow", "bg-mint", "bg-lavender", "bg-coral-soft"];
+  const tones = ["bg-sky", "bg-yellow", "bg-mint", "bg-coral-soft", "bg-cream"];
   return (
     <div className={`book-placeholder ${tones[tone % tones.length]}`}>
       <svg viewBox="0 0 140 110" aria-hidden="true" className="w-4/5 max-w-36">
