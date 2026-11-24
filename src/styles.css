@@ -2276,6 +2276,42 @@
     object-fit: cover;
   }
 
+  /* ═══ BOOK NOOK READER RECEIPT ═══ */
+  .dds-receipt-ticket {
+    filter: drop-shadow(0 18px 28px rgba(16, 58, 78, 0.16));
+    transform: rotate(1deg);
+    transition: transform 0.2s ease;
+  }
+
+  .dds-receipt-ticket:hover {
+    transform: rotate(0deg) translateY(-2px);
+  }
+
+  .dds-receipt-body {
+    padding: 1.15rem 1.45rem 1.35rem;
+    transition: background-color 0.2s ease;
+  }
+
+  .dds-receipt-mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+    letter-spacing: 0.02em;
+  }
+
+  .dds-receipt-barcode {
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    gap: 3px;
+    height: 26px;
+    width: fit-content;
+  }
+
+  .dds-receipt-barcode > span {
+    display: block;
+    background: var(--navy);
+    border-radius: 1px;
+  }
+
   /* Mobile refinements */
   @media (max-width: 639px) {
     .dds-header-inner {

@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { SiteHeader } from "@/components/SiteHeader";
 import { BookPlaceholder, cleanDescription } from "@/components/ReaderArt";
 import { BookMascotArt, DripWave, SiteFooter, SunnyStickerBadge } from "@/components/NookDesign";
+import { ReaderReceiptCard } from "@/components/ReaderReceiptCard";
 import { defaultDescription, useBooks } from "@/context/BooksContext";
 import { GENRE_OPTIONS, type Book, type Status } from "@/types/book";
 
@@ -982,7 +983,16 @@ function HomePage() {
         </div>
       </section>
 
-      {/* 8. FRAMED CREAM FOOTER */}
+      {/* Cream Drip Wave into Reader DNA Diner Receipt */}
+      <DripWave fillColor="#FCFBF7" bottomBgColor="#FCE172" variant="cream-to-yellow" />
+
+      {/* 8. CREATIVE FEATURE: PERSONALIZED BOOK NOOK DINER RECEIPT */}
+      <ReaderReceiptCard />
+
+      {/* Yellow Drip Wave into Framed Cream Footer */}
+      <DripWave fillColor="#FCE172" bottomBgColor="#FAF5E8" variant="yellow-to-cyan" />
+
+      {/* 9. FRAMED CREAM FOOTER */}
       <SiteFooter />
     </main>
   );
