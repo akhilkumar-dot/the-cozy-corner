@@ -19,7 +19,7 @@ export function SiteHeader({ activePage = "home" }: { activePage?: "home" | "she
         <Link
           to="/shelf"
           className={
-            activePage === "shelf" ? "text-yellow font-extrabold underline underline-offset-4" : ""
+            activePage === "shelf" ? "site-nav-active" : ""
           }
         >
           My shelf
