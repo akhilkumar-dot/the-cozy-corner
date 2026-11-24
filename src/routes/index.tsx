@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { SiteHeader } from "@/components/SiteHeader";
 import { BookPlaceholder, cleanDescription } from "@/components/ReaderArt";
 import { BookMascotArt, DripWave, SiteFooter, SunnyStickerBadge } from "@/components/NookDesign";
-import { ReaderReceiptCard } from "@/components/ReaderReceiptCard";
+import { ReadingSanctuary } from "@/components/ReadingSanctuary";
 import { defaultDescription, useBooks } from "@/context/BooksContext";
 import { GENRE_OPTIONS, type Book, type Status } from "@/types/book";
 
@@ -983,11 +983,11 @@ function HomePage() {
         </div>
       </section>
 
-      {/* Cream Drip Wave into Reader DNA Diner Receipt */}
+      {/* Cream Drip Wave into Cozy Reading Sanctuary */}
       <DripWave fillColor="#FCFBF7" bottomBgColor="#FCE172" variant="cream-to-yellow" />
 
-      {/* 8. CREATIVE FEATURE: PERSONALIZED BOOK NOOK DINER RECEIPT */}
-      <ReaderReceiptCard />
+      {/* 8. CREATIVE & USEFUL FEATURE: READING SANCTUARY & QUOTE JAR */}
+      <ReadingSanctuary />
 
       {/* Yellow Drip Wave into Framed Cream Footer */}
       <DripWave fillColor="#FCE172" bottomBgColor="#FAF5E8" variant="yellow-to-cyan" />
