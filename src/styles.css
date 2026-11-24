@@ -2253,27 +2253,6 @@
     overflow: hidden;
   }
 
-  .dds-parcel-ribbon {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background:
-      linear-gradient(
-        to bottom,
-        transparent 46%,
-        rgba(77, 196, 216, 0.14) 46%,
-        rgba(77, 196, 216, 0.14) 54%,
-        transparent 54%
-      ),
-      linear-gradient(
-        to right,
-        transparent 47%,
-        rgba(244, 122, 60, 0.12) 47%,
-        rgba(244, 122, 60, 0.12) 53%,
-        transparent 53%
-      );
-  }
-
   .dds-blind-cover {
     width: 112px;
     height: 164px;

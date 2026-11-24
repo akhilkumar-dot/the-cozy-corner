@@ -873,7 +873,6 @@ function HomePage() {
                 </div>
               ) : mysteryMode && !unwrapped ? (
                 <div className="dds-wrapped-parcel">
-                  <div className="dds-parcel-ribbon" aria-hidden="true" />
                   <div className="relative z-10 flex flex-col items-center text-center">
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white text-[#103A4E] text-[0.7rem] font-extrabold uppercase tracking-wider border border-[#103A4E]/15 shadow-xs mb-3">
                       <Gift size={12} className="text-[#F47A3C]" /> Secret TBR Match ·{" "}
