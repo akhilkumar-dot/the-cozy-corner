@@ -542,7 +542,7 @@
   .dds-showcase-cover > img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
   }
 
   .dds-action-pill-teal,
@@ -746,7 +746,7 @@
   .dds-dream-cover > img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
   }
 
   .dds-dream-info {
@@ -955,7 +955,7 @@
   .dds-gallery-tile > img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
   }
 
   /* ═══ FRAMED CREAM FOOTER ═══ */
@@ -1580,7 +1580,7 @@
       max-width: 100%;
       width: 100%;
       max-height: 155px;
-      object-fit: cover;
+      object-fit: contain;
       border-radius: 12px;
     }
 
@@ -2295,7 +2295,7 @@
   .dds-blind-cover > img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
   }
 
   /* ═══ COZY READING SANCTUARY & QUOTE JAR ═══ */
