@@ -357,7 +357,7 @@ export function BookModal({ open, onOpenChange, onAdd, onSave, editBook }: BookM
               </select>
             </label>
           </div>
-          <Button type="submit" className="dds-modal-submit">
+          <button type="submit" className="dds-modal-submit">
             {isEdit ? (
               <>
                 Save Changes <Check size={16} />
@@ -367,7 +367,7 @@ export function BookModal({ open, onOpenChange, onAdd, onSave, editBook }: BookM
                 Add to my nook <BookHeart size={16} />
               </>
             )}
-          </Button>
+          </button>
         </form>
       </DialogContent>
     </Dialog>
@@ -486,10 +486,9 @@ export function BooksSharedModals() {
                       ? currentBook?.id === book.id
                       : upNextIds.includes(book.id);
                   return (
-                    <Button
+                    <button
                       key={book.id}
                       type="button"
-                      variant="ghost"
                       className={`hero-picker-option ${selected ? "is-selected" : ""}`}
                       onClick={() =>
                         heroPickerMode === "current"
@@ -509,9 +508,9 @@ export function BooksSharedModals() {
                         <small>{book.author}</small>
                       </span>
                       <span className="hero-picker-check" aria-hidden="true">
-                        {selected ? <Check /> : <ChevronRight />}
+                        {selected ? <Check size={17} /> : <ChevronRight size={17} />}
                       </span>
-                    </Button>
+                    </button>
                   );
                 })
             )}

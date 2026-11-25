@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { BookOpen, Menu, Plus, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { useBooks } from "@/context/BooksContext";
 import { HeaderScallop, NookStackedLogo } from "@/components/NookDesign";
@@ -80,7 +79,7 @@ export function SiteHeader({ activePage = "home" }: { activePage?: "home" | "she
             </span>
           </Link>
 
-          <Button
+          <button
             type="button"
             onClick={() => {
               setMobileMenuOpen(false);
@@ -95,7 +94,7 @@ export function SiteHeader({ activePage = "home" }: { activePage?: "home" | "she
               <small className="hidden xl:block">Track Your Next Read</small>
               <strong>ADD BOOK</strong>
             </span>
-          </Button>
+          </button>
         </div>
       </div>
 

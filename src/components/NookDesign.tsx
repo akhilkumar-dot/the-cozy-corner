@@ -2,7 +2,6 @@ import React from "react";
 import { Link } from "@tanstack/react-router";
 import { BookHeart, BookOpen, Plus } from "lucide-react";
 import { useBooks } from "@/context/BooksContext";
-import { Button } from "@/components/ui/button";
 
 /**
  * Stacked bubbly retro badge logo inspired by the Dinky Donut Shack mark:
@@ -263,7 +262,7 @@ export function SiteFooter() {
                 </span>
               </Link>
 
-              <Button
+              <button
                 type="button"
                 onClick={() => setModalOpen(true)}
                 className="dds-pill-btn dds-pill-navy"
@@ -275,7 +274,7 @@ export function SiteFooter() {
                   <small>Track a Story</small>
                   <strong>ADD A BOOK</strong>
                 </span>
-              </Button>
+              </button>
             </div>
           </div>
         </div>
