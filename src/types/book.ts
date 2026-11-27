@@ -18,6 +18,7 @@ export type Book = {
   pdfFileName?: string | null | undefined;
   pdfFileSize?: number | null | undefined;
   genre?: string | undefined;
+  rating?: number | null | undefined;
 };
 
 export type BookMeta = {

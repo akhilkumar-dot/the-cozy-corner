@@ -58,6 +58,7 @@ export type DbBookRow = {
   pdf_file_name: string | null;
   pdf_file_size: number | null;
   pdf_storage_path: string | null;
+  rating?: number | null;
   created_at?: string;
 };
 

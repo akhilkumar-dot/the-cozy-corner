@@ -67,6 +67,7 @@ function HomePage() {
     setModalOpen,
     setEditingBook,
     handleCompleteBook,
+    handleRequestComplete,
     openPdf,
     celebrating,
     addBook,
@@ -268,7 +269,7 @@ function HomePage() {
                         <div className="flex flex-wrap gap-2 justify-center sm:justify-start pt-1">
                           <Button
                             type="button"
-                            onClick={() => handleCompleteBook(currentBook.id)}
+                            onClick={() => handleRequestComplete(currentBook.id)}
                             className="dds-action-pill-teal"
                           >
                             <Check size={13} /> Mark completed

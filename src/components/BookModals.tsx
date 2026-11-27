@@ -6,6 +6,7 @@ import {
   ChevronRight,
   FileText,
   ImagePlus,
+  Star,
   Trash2,
   X,
 } from "lucide-react";
@@ -374,6 +375,136 @@ export function BookModal({ open, onOpenChange, onAdd, onSave, editBook }: BookM
   );
 }
 
+/** Reusable star display for completed book cards */
+export function StarRating({ rating }: { rating: number }) {
+  const stars = [];
+  for (let i = 1; i <= 5; i++) {
+    const fill = rating >= i ? "full" : rating >= i - 0.5 ? "half" : "empty";
+    stars.push(
+      <span key={i} className={`star-display star-${fill}`} aria-hidden="true">
+        ★
+      </span>,
+    );
+  }
+  return (
+    <span className="star-rating-display" title={`${rating} out of 5`}>
+      {stars}
+      <span className="star-rating-num">{rating.toFixed(1)}</span>
+    </span>
+  );
+}
+
+export function RatingModal({
+  book,
+  onClose,
+  onConfirm,
+}: {
+  book: Book | null;
+  onClose: () => void;
+  onConfirm: (rating: number | null) => void;
+}) {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const [selected, setSelected] = useState<number | null>(null);
+
+  // Reset when book changes
+  useEffect(() => {
+    setHovered(null);
+    setSelected(null);
+  }, [book?.id]);
+
+  const display = hovered ?? selected;
+
+  const handleStarInteraction = (value: number) => setSelected(value);
+
+  return (
+    <Dialog open={book !== null} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="dds-dialog w-[calc(100vw-1.5rem)] sm:w-full max-w-sm p-0 overflow-hidden">
+        {/* Header band */}
+        <div className="rating-modal-header">
+          <div className="rating-modal-emoji">🎉</div>
+          <DialogTitle className="font-display text-2xl font-bold text-[#103A4E] text-center leading-tight">
+            You finished it!
+          </DialogTitle>
+          <DialogDescription className="text-sm text-[#103A4E]/70 font-medium text-center mt-1 leading-snug px-2">
+            <strong className="text-[#103A4E]">{book?.title}</strong>
+            {book?.author ? <> · {book.author}</> : null}
+          </DialogDescription>
+        </div>
+
+        <div className="rating-modal-body">
+          <p className="rating-modal-prompt">How would you rate it?</p>
+
+          {/* Star picker — 5 stars, each split into left half (x.5) and right half (x.0) */}
+          <div className="rating-stars-row" role="group" aria-label="Star rating">
+            {[1, 2, 3, 4, 5].map((star) => {
+              const filled = display !== null && display >= star;
+              const halfFilled = display !== null && display >= star - 0.5 && display < star;
+              return (
+                <span key={star} className="rating-star-wrap">
+                  {/* Left half = star - 0.5 */}
+                  <button
+                    type="button"
+                    className="rating-half-btn rating-half-left"
+                    aria-label={`${star - 0.5} stars`}
+                    onMouseEnter={() => setHovered(star - 0.5)}
+                    onMouseLeave={() => setHovered(null)}
+                    onClick={() => handleStarInteraction(star - 0.5)}
+                  />
+                  {/* Right half = star */}
+                  <button
+                    type="button"
+                    className="rating-half-btn rating-half-right"
+                    aria-label={`${star} stars`}
+                    onMouseEnter={() => setHovered(star)}
+                    onMouseLeave={() => setHovered(null)}
+                    onClick={() => handleStarInteraction(star)}
+                  />
+                  <Star
+                    size={36}
+                    className={`rating-star-icon ${filled ? "is-full" : halfFilled ? "is-half" : "is-empty"}`}
+                    aria-hidden="true"
+                  />
+                </span>
+              );
+            })}
+          </div>
+
+          {/* Numeric display */}
+          <div className="rating-numeric">
+            {display !== null ? (
+              <>
+                <span className="rating-numeric-value">{display.toFixed(1)}</span>
+                <span className="rating-numeric-denom">/ 5</span>
+              </>
+            ) : (
+              <span className="rating-numeric-placeholder">Tap a star to rate</span>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="rating-modal-actions">
+            <button
+              type="button"
+              className="rating-skip-btn"
+              onClick={() => onConfirm(null)}
+            >
+              Skip for now
+            </button>
+            <button
+              type="button"
+              className="rating-confirm-btn"
+              disabled={selected === null}
+              onClick={() => onConfirm(selected)}
+            >
+              <Check size={15} /> Save rating
+            </button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function BooksSharedModals() {
   const {
     books,
@@ -392,7 +523,12 @@ export function BooksSharedModals() {
     toggleUpNext,
     addBook,
     saveBook,
+    pendingRatingBookId,
+    setPendingRatingBookId,
+    handleCompleteBook,
   } = useBooks();
+
+  const pendingBook = books.find((b) => b.id === pendingRatingBookId) ?? null;
 
   return (
     <>
@@ -407,6 +543,15 @@ export function BooksSharedModals() {
         }}
         onSave={saveBook}
         editBook={editingBook}
+      />
+
+      {/* Rating modal — shown when "Mark Completed" is clicked */}
+      <RatingModal
+        book={pendingBook}
+        onClose={() => setPendingRatingBookId(null)}
+        onConfirm={(rating) => {
+          if (pendingRatingBookId) handleCompleteBook(pendingRatingBookId, rating);
+        }}
       />
 
       {/* Delete confirmation dialog */}

@@ -2601,6 +2601,223 @@
   }
 }
 
+@layer components {
+  /* ═══ RATING MODAL ═══ */
+  .rating-modal-header {
+    background: linear-gradient(135deg, #faf5e8 0%, #fdf3e0 100%);
+    border-bottom: 2px solid #ede4cf;
+    padding: 1.75rem 1.5rem 1.25rem;
+    text-align: center;
+  }
+
+  .rating-modal-emoji {
+    font-size: 2.4rem;
+    line-height: 1;
+    margin-bottom: 0.6rem;
+  }
+
+  .rating-modal-body {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .rating-modal-prompt {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--navy);
+    margin: 0;
+  }
+
+  /* Star picker row */
+  .rating-stars-row {
+    display: flex;
+    gap: 0.25rem;
+    align-items: center;
+  }
+
+  .rating-star-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+  }
+
+  .rating-star-icon {
+    pointer-events: none;
+    transition: transform 0.1s ease, color 0.1s ease;
+  }
+
+  .rating-star-icon.is-full {
+    color: #f5c518;
+    filter: drop-shadow(0 2px 4px rgba(245, 197, 24, 0.4));
+    transform: scale(1.08);
+  }
+
+  .rating-star-icon.is-half {
+    color: #f5c518;
+    opacity: 0.6;
+    transform: scale(1.04);
+  }
+
+  .rating-star-icon.is-empty {
+    color: #d4c9b0;
+  }
+
+  /* Invisible half-buttons overlaid on each star */
+  .rating-half-btn {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    width: 50%;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    z-index: 1;
+    padding: 0;
+  }
+
+  .rating-half-left {
+    left: 0;
+  }
+
+  .rating-half-right {
+    right: 0;
+  }
+
+  /* Numeric value display */
+  .rating-numeric {
+    display: flex;
+    align-items: baseline;
+    gap: 0.3rem;
+    min-height: 2rem;
+  }
+
+  .rating-numeric-value {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--navy);
+    line-height: 1;
+  }
+
+  .rating-numeric-denom {
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--navy);
+    opacity: 0.5;
+  }
+
+  .rating-numeric-placeholder {
+    font-family: var(--font-sans);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--navy);
+    opacity: 0.4;
+    font-style: italic;
+  }
+
+  /* Action buttons */
+  .rating-modal-actions {
+    display: flex;
+    gap: 0.75rem;
+    width: 100%;
+    padding-top: 0.25rem;
+  }
+
+  .rating-skip-btn {
+    flex: 1;
+    height: 42px;
+    border-radius: 9999px;
+    border: 2px solid #d4c9b0;
+    background: white;
+    color: var(--navy);
+    font-family: var(--font-display);
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .rating-skip-btn:hover {
+    background: #faf5e8;
+    border-color: #bbb0a0;
+  }
+
+  .rating-confirm-btn {
+    flex: 2;
+    height: 42px;
+    border-radius: 9999px;
+    border: 0;
+    background: var(--navy-deep);
+    color: white;
+    font-family: var(--font-display);
+    font-size: 0.88rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    transition: all 0.15s ease;
+    box-shadow: 0 4px 14px rgba(16, 58, 78, 0.25);
+  }
+
+  .rating-confirm-btn:hover:not(:disabled) {
+    background: var(--orange);
+    box-shadow: 0 6px 18px rgba(244, 122, 60, 0.35);
+    transform: translateY(-1px);
+  }
+
+  .rating-confirm-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* ═══ STAR RATING DISPLAY (on completed cards) ═══ */
+  .star-rating-display {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.1rem;
+    margin: 0.2rem 0 0.3rem;
+  }
+
+  .star-display {
+    font-size: 0.95rem;
+    line-height: 1;
+  }
+
+  .star-display.star-full {
+    color: #f5c518;
+  }
+
+  .star-display.star-half {
+    background: linear-gradient(90deg, #f5c518 50%, #d4c9b0 50%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .star-display.star-empty {
+    color: #d4c9b0;
+  }
+
+  .star-rating-num {
+    margin-left: 0.3rem;
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: var(--navy);
+    opacity: 0.65;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
 
   *,

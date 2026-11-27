@@ -118,6 +118,7 @@ export function rowToBook(row: DbBookRow): Book {
     hasPdf: Boolean(row.has_pdf),
     pdfFileName: row.pdf_file_name,
     pdfFileSize: row.pdf_file_size,
+    rating: row.rating ?? null,
   };
 }
 
@@ -135,6 +136,7 @@ export function bookToRow(book: Book): DbBookRow {
     pdf_file_name: book.pdfFileName || null,
     pdf_file_size: book.pdfFileSize || null,
     pdf_storage_path: book.hasPdf ? `${book.id}.pdf` : null,
+    rating: book.rating ?? null,
   };
 }
 
@@ -292,7 +294,10 @@ interface BooksContextValue {
   addBook: (book: Book, pdfFile?: File | null) => Promise<void>;
   saveBook: (updated: Book, pdfFile?: File | null, pdfRemoved?: boolean) => Promise<void>;
   openPdf: (bookId: string) => Promise<void>;
-  handleCompleteBook: (id: string) => void;
+  handleCompleteBook: (id: string, rating?: number | null) => void;
+  handleRequestComplete: (id: string) => void;
+  pendingRatingBookId: string | null;
+  setPendingRatingBookId: (id: string | null) => void;
   toggleStatus: (id: string) => void;
   toggleUpNext: (bookId: string) => void;
   chooseCurrentRead: (book: Book) => void;
@@ -311,6 +316,7 @@ export function BooksProvider({ children }: { children: React.ReactNode }) {
   const [bookToDelete, setBookToDelete] = useState<Book | null>(null);
   const [migrating, setMigrating] = useState(false);
   const [migrationStatus, setMigrationStatus] = useState<string | null>(null);
+  const [pendingRatingBookId, setPendingRatingBookId] = useState<string | null>(null);
 
   // Default to Lion Women of Tehran ("seed-22") and top 3 for Up Next if no storage
   const [currentReadId, setCurrentReadId] = useState<string | null>("seed-22");
@@ -754,7 +760,11 @@ export function BooksProvider({ children }: { children: React.ReactNode }) {
     return ["All", ...Array.from(set).sort()];
   }, [books]);
 
-  const handleCompleteBook = (id: string) => {
+  const handleRequestComplete = (id: string) => {
+    setPendingRatingBookId(id);
+  };
+
+  const handleCompleteBook = (id: string, rating?: number | null) => {
     const target = books.find((book) => book.id === id);
     if (!target) return;
 
@@ -772,7 +782,7 @@ export function BooksProvider({ children }: { children: React.ReactNode }) {
       candidateNext = books.find((b) => b.id !== id && b.status === "TBR");
     }
 
-    const updatedTarget: Book = { ...target, status: "Completed" };
+    const updatedTarget: Book = { ...target, status: "Completed", rating: rating ?? null };
 
     setBooks((current) =>
       current.map((b) => {
@@ -802,6 +812,7 @@ export function BooksProvider({ children }: { children: React.ReactNode }) {
       setUpNextIds((prev) => prev.filter((pid) => pid !== id));
     }
 
+    setPendingRatingBookId(null);
     setCelebrating(id);
     window.setTimeout(() => setCelebrating(null), 900);
     toast.success("Another story finished! 🎉", {
@@ -1024,6 +1035,9 @@ export function BooksProvider({ children }: { children: React.ReactNode }) {
     saveBook,
     openPdf,
     handleCompleteBook,
+    handleRequestComplete,
+    pendingRatingBookId,
+    setPendingRatingBookId,
     toggleStatus,
     toggleUpNext,
     chooseCurrentRead,

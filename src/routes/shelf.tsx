@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { SiteHeader } from "@/components/SiteHeader";
 import { BookPlaceholder, cleanDescription } from "@/components/ReaderArt";
 import { DripWave, SiteFooter, SunnyStickerBadge } from "@/components/NookDesign";
+import { StarRating } from "@/components/BookModals";
 import { useBooks } from "@/context/BooksContext";
 import type { Shelf, SortMode } from "@/types/book";
 
@@ -49,6 +50,7 @@ function ShelfPage() {
     toggleUpNext,
     toggleStatus,
     handleCompleteBook,
+    handleRequestComplete,
     handleRequestDelete,
     openPdf,
     setModalOpen,
@@ -278,6 +280,9 @@ function ShelfPage() {
                       {book.genre && <span className="genre-tag">{book.genre}</span>}
                     </div>
                     <h3>{book.title}</h3>
+                    {book.status === "Completed" && book.rating != null && (
+                      <StarRating rating={book.rating} />
+                    )}
                     {cleanDescription(book.description) && (
                       <p className="description">
                         {cleanDescription(book.description).replace(/<[^>]*>/g, " ")}
@@ -292,7 +297,7 @@ function ShelfPage() {
                           onClick={() =>
                             book.status === "Completed"
                               ? toggleStatus(book.id)
-                              : handleCompleteBook(book.id)
+                              : handleRequestComplete(book.id)
                           }
                           className={`card-action-pill card-complete-btn ${
                             book.status === "Completed" ? "is-complete" : ""
