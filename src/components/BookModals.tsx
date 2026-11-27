@@ -22,7 +22,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { deletePdf, savePdf } from "@/lib/pdfStore";
-import { GENRE_OPTIONS, type Book, type Status } from "@/types/book";
+import { GENRE_OPTIONS, type Book, type BookRating, type Status } from "@/types/book";
 import {
   compressImageFile,
   defaultDescription,
@@ -375,6 +375,7 @@ export function BookModal({ open, onOpenChange, onAdd, onSave, editBook }: BookM
   );
 }
 
+<<<<<<< HEAD
 /** Reusable star display for completed book cards */
 export function StarRating({ rating }: { rating: number }) {
   const stars = [];
@@ -500,6 +501,79 @@ export function RatingModal({
             </button>
           </div>
         </div>
+=======
+function CompletionRatingDialog({
+  book,
+  onCancel,
+  onConfirm,
+}: {
+  book: Book | null;
+  onCancel: () => void;
+  onConfirm: (rating: BookRating) => void;
+}) {
+  const [rating, setRating] = useState<BookRating | null>(null);
+
+  return (
+    <Dialog
+      open={book !== null}
+      onOpenChange={(open) => {
+        if (!open) onCancel();
+      }}
+    >
+      <DialogContent className="dds-dialog w-[calc(100vw-1.5rem)] sm:w-full max-w-md p-6">
+        <DialogHeader>
+          <DialogTitle className="font-display text-2xl text-[#103A4E]">
+            Rate your read
+          </DialogTitle>
+          <DialogDescription className="text-[#103A4E]/75 font-medium">
+            {book ? (
+              <>
+                How many stars would you give <strong>“{book.title}”</strong>?
+              </>
+            ) : (
+              "Choose a rating from one to five stars."
+            )}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex justify-center gap-1 py-3" role="group" aria-label="Choose a rating from 1 to 5 stars">
+          {([1, 2, 3, 4, 5] as const).map((value) => {
+            const filled = rating !== null && value <= rating;
+            return (
+              <Button
+                key={value}
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={`${value} out of 5 stars`}
+                aria-pressed={rating === value}
+                onClick={() => setRating(value)}
+                className={`h-12 w-12 ${filled ? "text-orange" : "text-muted-foreground"} hover:bg-orange/10`}
+              >
+                <Star size={28} className={filled ? "fill-current" : ""} />
+              </Button>
+            );
+          })}
+        </div>
+        <p className="min-h-5 text-center text-sm font-bold text-muted-foreground" aria-live="polite">
+          {rating ? `${rating} out of 5 stars` : "Select a rating to finish"}
+        </p>
+
+        <DialogFooter className="mt-3 flex flex-row justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={rating === null}
+            onClick={() => {
+              if (rating !== null) onConfirm(rating);
+            }}
+          >
+            Finish reading
+          </Button>
+        </DialogFooter>
+>>>>>>> 986d9ff14ff59465de17e00ec4ff638f0c55480f
       </DialogContent>
     </Dialog>
   );
@@ -510,6 +584,9 @@ export function BooksSharedModals() {
     books,
     modalOpen,
     setModalOpen,
+    pendingCompletionBook,
+    cancelBookCompletion,
+    confirmBookCompletion,
     editingBook,
     setEditingBook,
     bookToDelete,
@@ -545,6 +622,7 @@ export function BooksSharedModals() {
         editBook={editingBook}
       />
 
+<<<<<<< HEAD
       {/* Rating modal — shown when "Mark Completed" is clicked */}
       <RatingModal
         book={pendingBook}
@@ -552,6 +630,13 @@ export function BooksSharedModals() {
         onConfirm={(rating) => {
           if (pendingRatingBookId) handleCompleteBook(pendingRatingBookId, rating);
         }}
+=======
+      <CompletionRatingDialog
+        key={pendingCompletionBook?.id ?? "none"}
+        book={pendingCompletionBook}
+        onCancel={cancelBookCompletion}
+        onConfirm={confirmBookCompletion}
+>>>>>>> 986d9ff14ff59465de17e00ec4ff638f0c55480f
       />
 
       {/* Delete confirmation dialog */}
