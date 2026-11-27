@@ -4,10 +4,15 @@ export type Status = "TBR" | "Reading" | "Completed";
 export type Shelf = "All" | "TBR" | "Completed";
 export type SortMode = "recent" | "title" | "author";
 export type HeroPickerMode = "current" | "up-next" | null;
-export type BookRating = 1 | 2 | 3 | 4 | 5;
+export type BookRating = number;
 
-export function isBookRating(value: unknown): value is BookRating {
-  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 5;
+export function isBookRating(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 5;
+}
+
+export function normalizeBookRating(value: number): number {
+  const clamped = Math.max(0, Math.min(5, value));
+  return Math.round(clamped * 10) / 10;
 }
 
 export type Book = {
@@ -23,11 +28,7 @@ export type Book = {
   pdfFileName?: string | null | undefined;
   pdfFileSize?: number | null | undefined;
   genre?: string | undefined;
-<<<<<<< HEAD
   rating?: number | null | undefined;
-=======
-  rating?: BookRating | undefined;
->>>>>>> 986d9ff14ff59465de17e00ec4ff638f0c55480f
 };
 
 export type BookMeta = {

@@ -23,7 +23,13 @@ import {
   uploadPdfToStorage,
   type DbBookRow,
 } from "@/lib/supabase";
-import { isBookRating, type Book, type BookRating, type HeroPickerMode, type BookMeta } from "@/types/book";
+import {
+  isBookRating,
+  normalizeBookRating,
+  type Book,
+  type HeroPickerMode,
+  type BookMeta,
+} from "@/types/book";
 import { cleanDescription } from "@/components/ReaderArt";
 
 export const seedGenreMap: Record<string, string> = {
@@ -141,13 +147,16 @@ export function bookToRow(book: Book): DbBookRow {
 }
 
 export function mergeLocalBookRatings(remoteBooks: Book[], localBooks: Book[]): Book[] {
-  const ratingsById = new Map<string, BookRating>();
+  const ratingsById = new Map<string, number>();
   for (const book of localBooks) {
-    if (isBookRating(book.rating)) ratingsById.set(book.id, book.rating);
+    if (isBookRating(book.rating)) ratingsById.set(book.id, normalizeBookRating(book.rating));
   }
   return remoteBooks.map((book) => {
-    const rating = ratingsById.get(book.id);
-    return rating ? { ...book, rating } : book;
+    if (isBookRating(book.rating)) {
+      return { ...book, rating: normalizeBookRating(book.rating) };
+    }
+    const localRating = ratingsById.get(book.id);
+    return localRating !== undefined ? { ...book, rating: localRating } : book;
   });
 }
 
@@ -286,9 +295,6 @@ interface BooksContextValue {
   migrationStatus: string | null;
   modalOpen: boolean;
   setModalOpen: (open: boolean) => void;
-  pendingCompletionBook: Book | null;
-  cancelBookCompletion: () => void;
-  confirmBookCompletion: (rating: number) => void;
   editingBook: Book | null;
   setEditingBook: (book: Book | null) => void;
   bookToDelete: Book | null;
@@ -326,7 +332,6 @@ export function BooksProvider({ children }: { children: React.ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [celebrating, setCelebrating] = useState<string | null>(null);
-  const [pendingCompletionBookId, setPendingCompletionBookId] = useState<string | null>(null);
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [bookToDelete, setBookToDelete] = useState<Book | null>(null);
   const [migrating, setMigrating] = useState(false);
@@ -688,8 +693,6 @@ export function BooksProvider({ children }: { children: React.ReactNode }) {
   const reading = books.filter((b) => b.status === "Reading").length;
   const tbr = books.filter((b) => b.status === "TBR").length;
   const rhythm = books.length ? Math.round((completed / books.length) * 100) : 0;
-  const pendingCompletionBook =
-    books.find((book) => book.id === pendingCompletionBookId) ?? null;
 
   const currentBook = useMemo(() => {
     if (currentReadId) {
@@ -778,26 +781,21 @@ export function BooksProvider({ children }: { children: React.ReactNode }) {
   }, [books]);
 
   const handleRequestComplete = (id: string) => {
+    const target = books.find((book) => book.id === id);
+    if (!target || target.status === "Completed") return;
     setPendingRatingBookId(id);
   };
 
   const handleCompleteBook = (id: string, rating?: number | null) => {
     const target = books.find((book) => book.id === id);
-    if (!target || target.status === "Completed") return;
-    setPendingCompletionBookId(id);
-  };
-
-  const cancelBookCompletion = () => setPendingCompletionBookId(null);
-
-  const confirmBookCompletion = (rating: number) => {
-    if (!isBookRating(rating)) return;
-    const target = books.find((book) => book.id === pendingCompletionBookId);
     if (!target || target.status === "Completed") {
-      setPendingCompletionBookId(null);
+      setPendingRatingBookId(null);
       return;
     }
 
-    const id = target.id;
+    const normalizedRating =
+      typeof rating === "number" && isBookRating(rating) ? normalizeBookRating(rating) : null;
+
     const isCurrent = id === currentReadId || id === currentBook?.id;
 
     let candidateNext = upNextIds
@@ -812,11 +810,7 @@ export function BooksProvider({ children }: { children: React.ReactNode }) {
       candidateNext = books.find((b) => b.id !== id && b.status === "TBR");
     }
 
-<<<<<<< HEAD
-    const updatedTarget: Book = { ...target, status: "Completed", rating: rating ?? null };
-=======
-    const updatedTarget: Book = { ...target, status: "Completed", rating };
->>>>>>> 986d9ff14ff59465de17e00ec4ff638f0c55480f
+    const updatedTarget: Book = { ...target, status: "Completed", rating: normalizedRating };
 
     setBooks((current) =>
       current.map((b) => {
@@ -846,18 +840,14 @@ export function BooksProvider({ children }: { children: React.ReactNode }) {
       setUpNextIds((prev) => prev.filter((pid) => pid !== id));
     }
 
-<<<<<<< HEAD
     setPendingRatingBookId(null);
-=======
-    setPendingCompletionBookId(null);
->>>>>>> 986d9ff14ff59465de17e00ec4ff638f0c55480f
     setCelebrating(id);
     window.setTimeout(() => setCelebrating(null), 900);
     toast.success("Another story finished! 🎉", {
       description:
         isCurrent && candidateNext
-          ? `"${target.title}" completed. Now reading "${candidateNext.title}"!`
-          : `"${target.title}" moved to Completed.`,
+          ? `"${target.title}" completed${normalizedRating !== null ? ` (${normalizedRating.toFixed(1)}/5)` : ""}. Now reading "${candidateNext.title}"!`
+          : `"${target.title}" moved to Completed${normalizedRating !== null ? ` (${normalizedRating.toFixed(1)}/5)` : ""}.`,
     });
   };
 
@@ -866,7 +856,7 @@ export function BooksProvider({ children }: { children: React.ReactNode }) {
     if (!target) return;
 
     if (target.status === "Reading") {
-      handleCompleteBook(id);
+      handleRequestComplete(id);
       return;
     }
 
@@ -1053,9 +1043,6 @@ export function BooksProvider({ children }: { children: React.ReactNode }) {
     migrationStatus,
     modalOpen,
     setModalOpen,
-    pendingCompletionBook,
-    cancelBookCompletion,
-    confirmBookCompletion,
     editingBook,
     setEditingBook,
     bookToDelete,

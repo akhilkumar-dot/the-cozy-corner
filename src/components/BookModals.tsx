@@ -22,7 +22,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { deletePdf, savePdf } from "@/lib/pdfStore";
-import { GENRE_OPTIONS, type Book, type BookRating, type Status } from "@/types/book";
+import { GENRE_OPTIONS, normalizeBookRating, type Book, type Status } from "@/types/book";
 import {
   compressImageFile,
   defaultDescription,
@@ -216,6 +216,18 @@ export function BookModal({ open, onOpenChange, onAdd, onSave, editBook }: BookM
       rawStatus === "Completed" ? "Completed" : rawStatus === "Reading" ? "Reading" : "TBR";
     const genre = String(data.get("genre") ?? "Fiction").trim() || "Fiction";
 
+    const rawRating = data.get("rating");
+    const parsedRating =
+      rawRating !== null && String(rawRating).trim() !== "" ? Number(rawRating) : NaN;
+    const preservedOrEditedRating =
+      status === "Completed"
+        ? Number.isFinite(parsedRating) && parsedRating >= 0 && parsedRating <= 5
+          ? normalizeBookRating(parsedRating)
+          : isEdit && editBook
+            ? (editBook.rating ?? null)
+            : null
+        : null;
+
     const book: Book = {
       id,
       title,
@@ -229,6 +241,7 @@ export function BookModal({ open, onOpenChange, onAdd, onSave, editBook }: BookM
       pdfFileName,
       pdfFileSize,
       genre,
+      rating: preservedOrEditedRating,
     };
 
     if (isEdit) {
@@ -358,6 +371,22 @@ export function BookModal({ open, onOpenChange, onAdd, onSave, editBook }: BookM
               </select>
             </label>
           </div>
+          {isEdit && editBook?.status === "Completed" && (
+            <label className="field-label">
+              Rating (out of 5, decimals allowed)
+              <Input
+                aria-label="Rating out of 5"
+                name="rating"
+                type="number"
+                min={0}
+                max={5}
+                step={0.1}
+                placeholder="e.g. 4.5"
+                defaultValue={editBook.rating != null ? editBook.rating : ""}
+                key={`rating-${editBook?.id ?? "new"}-${open ? "open" : "closed"}`}
+              />
+            </label>
+          )}
           <button type="submit" className="dds-modal-submit">
             {isEdit ? (
               <>
@@ -375,22 +404,25 @@ export function BookModal({ open, onOpenChange, onAdd, onSave, editBook }: BookM
   );
 }
 
-<<<<<<< HEAD
-/** Reusable star display for completed book cards */
+/** Reusable star display for completed book cards (supports exact decimal/point ratings) */
 export function StarRating({ rating }: { rating: number }) {
-  const stars = [];
-  for (let i = 1; i <= 5; i++) {
-    const fill = rating >= i ? "full" : rating >= i - 0.5 ? "half" : "empty";
-    stars.push(
-      <span key={i} className={`star-display star-${fill}`} aria-hidden="true">
-        ★
-      </span>,
-    );
-  }
+  const normalized = normalizeBookRating(rating);
   return (
-    <span className="star-rating-display" title={`${rating} out of 5`}>
-      {stars}
-      <span className="star-rating-num">{rating.toFixed(1)}</span>
+    <span className="star-rating-display" title={`${normalized.toFixed(1)} out of 5`}>
+      <span className="star-rating-stars" aria-hidden="true">
+        {[1, 2, 3, 4, 5].map((starIndex) => {
+          const fillPct = Math.max(0, Math.min(1, normalized - (starIndex - 1))) * 100;
+          return (
+            <span key={starIndex} className="star-display-wrap">
+              <Star size={14} className="star-display-base" />
+              <span className="star-display-fill" style={{ width: `${fillPct}%` }}>
+                <Star size={14} className="star-display-gold" />
+              </span>
+            </span>
+          );
+        })}
+      </span>
+      <span className="star-rating-num">{normalized.toFixed(1)} / 5</span>
     </span>
   );
 }
@@ -406,174 +438,152 @@ export function RatingModal({
 }) {
   const [hovered, setHovered] = useState<number | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
+  const [inputText, setInputText] = useState<string>("");
 
-  // Reset when book changes
   useEffect(() => {
     setHovered(null);
     setSelected(null);
+    setInputText("");
   }, [book?.id]);
 
   const display = hovered ?? selected;
 
-  const handleStarInteraction = (value: number) => setSelected(value);
+  const selectValue = (value: number) => {
+    const normalized = normalizeBookRating(value);
+    setSelected(normalized);
+    setInputText(normalized.toFixed(1));
+  };
+
+  const handleInputChange = (raw: string) => {
+    setInputText(raw);
+    if (raw.trim() === "") {
+      setSelected(null);
+      return;
+    }
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 5) {
+      setSelected(normalizeBookRating(parsed));
+    }
+  };
 
   return (
-    <Dialog open={book !== null} onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog
+      open={book !== null}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
       <DialogContent className="dds-dialog w-[calc(100vw-1.5rem)] sm:w-full max-w-sm p-0 overflow-hidden">
-        {/* Header band */}
         <div className="rating-modal-header">
           <div className="rating-modal-emoji">🎉</div>
           <DialogTitle className="font-display text-2xl font-bold text-[#103A4E] text-center leading-tight">
             You finished it!
           </DialogTitle>
-          <DialogDescription className="text-sm text-[#103A4E]/70 font-medium text-center mt-1 leading-snug px-2">
+          <DialogDescription className="text-sm text-[#103A4E]/75 font-medium text-center mt-1 leading-snug px-2">
             <strong className="text-[#103A4E]">{book?.title}</strong>
             {book?.author ? <> · {book.author}</> : null}
           </DialogDescription>
         </div>
 
         <div className="rating-modal-body">
-          <p className="rating-modal-prompt">How would you rate it?</p>
+          <p className="rating-modal-prompt">How would you rate it out of 5?</p>
 
-          {/* Star picker — 5 stars, each split into left half (x.5) and right half (x.0) */}
+          {/* Star picker — each star has left (x.5) and right (x.0) hit areas, and renders exact point fill */}
           <div className="rating-stars-row" role="group" aria-label="Star rating">
             {[1, 2, 3, 4, 5].map((star) => {
-              const filled = display !== null && display >= star;
-              const halfFilled = display !== null && display >= star - 0.5 && display < star;
+              const fillPct =
+                display !== null ? Math.max(0, Math.min(1, display - (star - 1))) * 100 : 0;
               return (
                 <span key={star} className="rating-star-wrap">
-                  {/* Left half = star - 0.5 */}
                   <button
                     type="button"
                     className="rating-half-btn rating-half-left"
                     aria-label={`${star - 0.5} stars`}
                     onMouseEnter={() => setHovered(star - 0.5)}
                     onMouseLeave={() => setHovered(null)}
-                    onClick={() => handleStarInteraction(star - 0.5)}
+                    onClick={() => selectValue(star - 0.5)}
                   />
-                  {/* Right half = star */}
                   <button
                     type="button"
                     className="rating-half-btn rating-half-right"
                     aria-label={`${star} stars`}
                     onMouseEnter={() => setHovered(star)}
                     onMouseLeave={() => setHovered(null)}
-                    onClick={() => handleStarInteraction(star)}
+                    onClick={() => selectValue(star)}
                   />
-                  <Star
-                    size={36}
-                    className={`rating-star-icon ${filled ? "is-full" : halfFilled ? "is-half" : "is-empty"}`}
-                    aria-hidden="true"
-                  />
+                  <span className="rating-star-stack" aria-hidden="true">
+                    <Star size={36} className="rating-star-base" />
+                    <span className="rating-star-fill" style={{ width: `${fillPct}%` }}>
+                      <Star size={36} className="rating-star-gold" />
+                    </span>
+                  </span>
                 </span>
               );
             })}
           </div>
 
-          {/* Numeric display */}
-          <div className="rating-numeric">
+          {/* Numeric readout */}
+          <div className="rating-numeric" aria-live="polite">
             {display !== null ? (
               <>
                 <span className="rating-numeric-value">{display.toFixed(1)}</span>
                 <span className="rating-numeric-denom">/ 5</span>
               </>
             ) : (
-              <span className="rating-numeric-placeholder">Tap a star to rate</span>
+              <span className="rating-numeric-placeholder">
+                Tap a star or enter points (e.g. 4.3)
+              </span>
             )}
+          </div>
+
+          {/* Decimal / Point Fine-Tuner */}
+          <div className="rating-points-controls">
+            <input
+              type="range"
+              min={0}
+              max={5}
+              step={0.1}
+              value={selected ?? 0}
+              aria-label="Fine-tune rating in points out of 5"
+              onChange={(e) => selectValue(Number(e.target.value))}
+              className="rating-points-slider"
+            />
+            <div className="rating-points-input-wrap">
+              <label htmlFor="rating-points-input" className="rating-points-label">
+                Exact score:
+              </label>
+              <input
+                id="rating-points-input"
+                type="number"
+                min={0}
+                max={5}
+                step={0.1}
+                placeholder="4.5"
+                value={inputText}
+                onChange={(e) => handleInputChange(e.target.value)}
+                className="rating-points-input"
+              />
+              <span className="rating-points-max">/ 5</span>
+            </div>
           </div>
 
           {/* Actions */}
           <div className="rating-modal-actions">
-            <button
-              type="button"
-              className="rating-skip-btn"
-              onClick={() => onConfirm(null)}
-            >
+            <button type="button" className="rating-skip-btn" onClick={() => onConfirm(null)}>
               Skip for now
             </button>
             <button
               type="button"
               className="rating-confirm-btn"
               disabled={selected === null}
-              onClick={() => onConfirm(selected)}
+              onClick={() => {
+                if (selected !== null) onConfirm(selected);
+              }}
             >
               <Check size={15} /> Save rating
             </button>
           </div>
         </div>
-=======
-function CompletionRatingDialog({
-  book,
-  onCancel,
-  onConfirm,
-}: {
-  book: Book | null;
-  onCancel: () => void;
-  onConfirm: (rating: BookRating) => void;
-}) {
-  const [rating, setRating] = useState<BookRating | null>(null);
-
-  return (
-    <Dialog
-      open={book !== null}
-      onOpenChange={(open) => {
-        if (!open) onCancel();
-      }}
-    >
-      <DialogContent className="dds-dialog w-[calc(100vw-1.5rem)] sm:w-full max-w-md p-6">
-        <DialogHeader>
-          <DialogTitle className="font-display text-2xl text-[#103A4E]">
-            Rate your read
-          </DialogTitle>
-          <DialogDescription className="text-[#103A4E]/75 font-medium">
-            {book ? (
-              <>
-                How many stars would you give <strong>“{book.title}”</strong>?
-              </>
-            ) : (
-              "Choose a rating from one to five stars."
-            )}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex justify-center gap-1 py-3" role="group" aria-label="Choose a rating from 1 to 5 stars">
-          {([1, 2, 3, 4, 5] as const).map((value) => {
-            const filled = rating !== null && value <= rating;
-            return (
-              <Button
-                key={value}
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label={`${value} out of 5 stars`}
-                aria-pressed={rating === value}
-                onClick={() => setRating(value)}
-                className={`h-12 w-12 ${filled ? "text-orange" : "text-muted-foreground"} hover:bg-orange/10`}
-              >
-                <Star size={28} className={filled ? "fill-current" : ""} />
-              </Button>
-            );
-          })}
-        </div>
-        <p className="min-h-5 text-center text-sm font-bold text-muted-foreground" aria-live="polite">
-          {rating ? `${rating} out of 5 stars` : "Select a rating to finish"}
-        </p>
-
-        <DialogFooter className="mt-3 flex flex-row justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            disabled={rating === null}
-            onClick={() => {
-              if (rating !== null) onConfirm(rating);
-            }}
-          >
-            Finish reading
-          </Button>
-        </DialogFooter>
->>>>>>> 986d9ff14ff59465de17e00ec4ff638f0c55480f
       </DialogContent>
     </Dialog>
   );
@@ -584,9 +594,6 @@ export function BooksSharedModals() {
     books,
     modalOpen,
     setModalOpen,
-    pendingCompletionBook,
-    cancelBookCompletion,
-    confirmBookCompletion,
     editingBook,
     setEditingBook,
     bookToDelete,
@@ -622,7 +629,6 @@ export function BooksSharedModals() {
         editBook={editingBook}
       />
 
-<<<<<<< HEAD
       {/* Rating modal — shown when "Mark Completed" is clicked */}
       <RatingModal
         book={pendingBook}
@@ -630,13 +636,6 @@ export function BooksSharedModals() {
         onConfirm={(rating) => {
           if (pendingRatingBookId) handleCompleteBook(pendingRatingBookId, rating);
         }}
-=======
-      <CompletionRatingDialog
-        key={pendingCompletionBook?.id ?? "none"}
-        book={pendingCompletionBook}
-        onCancel={cancelBookCompletion}
-        onConfirm={confirmBookCompletion}
->>>>>>> 986d9ff14ff59465de17e00ec4ff638f0c55480f
       />
 
       {/* Delete confirmation dialog */}
